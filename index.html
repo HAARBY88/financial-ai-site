@@ -5,9 +5,10 @@
   <title>AI Financial Statement Analysis</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 700px; margin: auto; padding: 20px; }
-    h1 { color: #333; }
+    h1, h2 { color: #333; }
     form { margin-bottom: 20px; }
     pre { background: #f4f4f4; padding: 15px; white-space: pre-wrap; }
+    input, select, button { margin-top: 5px; margin-bottom: 10px; }
   </style>
 </head>
 <body>
@@ -29,18 +30,18 @@
     <label>Financial Statement (PDF/Excel/Word):
       <input type="file" name="statement" accept=".pdf,.xlsx,.xls,.docx" required>
     </label>
-    <br><br>
+    <br>
     <label>Accounting Framework:
       <select name="framework" required>
         <option value="IFRS">IFRS</option>
         <option value="US GAAP">US GAAP</option>
       </select>
     </label>
-    <br><br>
+    <br>
     <label>Analysis Topic:
       <input type="text" name="topic" placeholder="e.g. Revenue Recognition" required>
     </label>
-    <br><br>
+    <br>
     <button type="submit">Upload & Analyse</button>
   </form>
 
@@ -48,30 +49,54 @@
   <pre id="output">Your analysis will appear here...</pre>
 
   <script>
-    // Handle Companies House form
+    // --- Companies House form ---
     document.getElementById("companyForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const number = document.getElementById("companyNumber").value;
+      const number = document.getElementById("companyNumber").value.trim();
+
+      if (!number) {
+        document.getElementById("companyOutput").textContent = "Please enter a company number.";
+        return;
+      }
+
       document.getElementById("companyOutput").textContent = "Fetching company info...";
-      const res = await fetch(`/.netlify/functions/companiesHouse?company=${number}`);
-      const data = await res.json();
-      document.getElementById("companyOutput").textContent = JSON.stringify(data, null, 2);
+
+      try {
+        const res = await fetch(`/.netlify/functions/companiesHouse?company=${number}`);
+        const data = await res.json();
+
+        if (res.ok) {
+          // Success → pretty-print JSON
+          document.getElementById("companyOutput").textContent = JSON.stringify(data, null, 2);
+        } else {
+          // API returned an error → show message
+          document.getElementById("companyOutput").textContent =
+            `Error fetching company info:\n${data.error || "Unknown error"}\nDetails: ${data.details || "None"}`;
+        }
+      } catch (err) {
+        // Network or other unexpected error
+        document.getElementById("companyOutput").textContent =
+          `Unexpected error:\n${err.message}`;
+      }
     });
 
-    // Handle file upload form
+    // --- File upload + AI analysis form ---
     document.getElementById("uploadForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const formData = new FormData(e.target);
 
       document.getElementById("output").textContent = "Processing...";
 
-      const res = await fetch("/.netlify/functions/processUpload", {
-        method: "POST",
-        body: formData
-      });
-
-      const data = await res.json();
-      document.getElementById("output").textContent = data.output || "Error processing file.";
+      try {
+        const res = await fetch("/.netlify/functions/processUpload", {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+        document.getElementById("output").textContent = data.output || "Error processing file.";
+      } catch (err) {
+        document.getElementById("output").textContent = `Unexpected error:\n${err.message}`;
+      }
     });
   </script>
 </body>
