@@ -1,10 +1,11 @@
 {
   "name": "financial-ai-site",
   "version": "1.0.0",
+  "description": "Financial AI site with Companies House integration",
+  "main": "index.js",
+  "scripts": {},
   "dependencies": {
-    "node-fetch": "^3.3.2",
-    "openai": "^4.0.0",
-    "pdf-parse": "^1.1.1",
-    "multiparty": "^4.2.3"
+    "node-fetch": "2.6.7"
   }
 }
+
