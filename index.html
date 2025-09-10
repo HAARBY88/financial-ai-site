@@ -1,126 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>AI Financial Statement Analysis</title>
+  <meta charset="UTF-8" />
+  <title>AI Financial Tools</title>
   <style>
     body { font-family: Arial, sans-serif; max-width: 700px; margin: auto; padding: 20px; }
-    h1, h2 { color: #333; }
+    h1 { color: #333; }
     form { margin-bottom: 20px; }
     pre { background: #f4f4f4; padding: 15px; white-space: pre-wrap; }
-    input, select, button { margin-top: 5px; margin-bottom: 10px; }
   </style>
 </head>
 <body>
-  <h1>AI Financial Statement Analysis</h1>
+  <h1>Company Info + AI Analysis</h1>
 
-  <!-- Companies House Section -->
-  <h2>Look up a Company</h2>
+  <h2>1. Fetch Company Info (Companies House)</h2>
   <form id="companyForm">
     <label>Company Number:
-      <input type="text" id="companyNumber" placeholder="e.g. 00000006" required>
+      <input type="text" name="company" required placeholder="e.g. 00000006">
     </label>
-    <button type="submit">Fetch Company Info</button>
+    <button type="submit">Fetch Info</button>
   </form>
   <pre id="companyOutput">Company info will appear here...</pre>
 
-  <!-- Upload Section -->
-  <h2>Upload Financial Statements</h2>
-  <form id="uploadForm">
-    <label>Financial Statement (PDF/Excel/Word):
-      <input type="file" name="statement" accept=".pdf,.xlsx,.xls,.docx" required>
-    </label>
-    <br>
-    <label>Accounting Framework:
+  <h2>2. Upload Financial Statements for AI Analysis</h2>
+  <form id="uploadForm" enctype="multipart/form-data">
+    <label>Financial Statement (PDF only for now):
+      <input type="file" name="statement" accept=".pdf" required>
+    </label><br><br>
+    <label>Framework:
       <select name="framework" required>
         <option value="IFRS">IFRS</option>
         <option value="US GAAP">US GAAP</option>
       </select>
-    </label>
-    <br>
-    <label>Analysis Topic:
+    </label><br><br>
+    <label>Topic:
       <input type="text" name="topic" placeholder="e.g. Revenue Recognition" required>
-    </label>
-    <br>
+    </label><br><br>
     <button type="submit">Upload & Analyse</button>
   </form>
-
-  <h2>AI Output</h2>
-  <pre id="output">Your analysis will appear here...</pre>
+  <pre id="aiOutput">AI analysis will appear here...</pre>
 
   <script>
-    // --- Companies House safe fetch ---
+    // Fetch Companies House info
     document.getElementById("companyForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const number = document.getElementById("companyNumber").value.trim();
-
-      if (!number) {
-        document.getElementById("companyOutput").textContent = "Please enter a company number.";
-        return;
-      }
-
-      document.getElementById("companyOutput").textContent = "Fetching company info...";
-
+      const companyNumber = e.target.company.value;
+      document.getElementById("companyOutput").textContent = "Fetching...";
       try {
-        const res = await fetch(`/.netlify/functions/companiesHouse?company=${number}`);
-        const text = await res.text(); // read as text first
-        let data;
-        try {
-          data = JSON.parse(text); // attempt to parse JSON
-        } catch {
-          document.getElementById("companyOutput").textContent =
-            `Server returned non-JSON response:\n${text}`;
-          return;
-        }
-
-        if (res.ok) {
-          document.getElementById("companyOutput").textContent = JSON.stringify(data, null, 2);
-        } else {
-          document.getElementById("companyOutput").textContent =
-            `Error fetching company info:\n${data.error || "Unknown error"}\nDetails: ${data.details || "None"}`;
-        }
+        const res = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
+        const data = await res.json();
+        document.getElementById("companyOutput").textContent = JSON.stringify(data, null, 2);
       } catch (err) {
-        document.getElementById("companyOutput").textContent = `Unexpected error:\n${err.message}`;
+        document.getElementById("companyOutput").textContent = "Error fetching company info.";
       }
     });
 
-    // --- File upload + AI analysis safe fetch ---
+    // Upload and process financials
     document.getElementById("uploadForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const formData = new FormData(e.target);
-      document.getElementById("output").textContent = "Processing...";
-
+      document.getElementById("aiOutput").textContent = "Processing...";
       try {
-        const res = await fetch("/.netlify/functions/processUpload", {
-          method: "POST",
-          body: formData
-        });
-
-        const text = await res.text(); // read as text first
-        let data;
-        try {
-          data = JSON.parse(text); // attempt to parse JSON
-        } catch {
-          document.getElementById("output").textContent =
-            `Server returned non-JSON response:\n${text}`;
-          return;
-        }
-
-        if (res.ok) {
-          document.getElementById("output").textContent = data.output || "No output returned.";
-        } else {
-          document.getElementById("output").textContent =
-            `Error processing file:\n${data.error || "Unknown error"}\nDetails: ${data.details || "None"}`;
-        }
-
+        const res = await fetch("/.netlify/functions/processUpload", { method: "POST", body: formData });
+        const data = await res.json();
+        document.getElementById("aiOutput").textContent = data.output || "No output.";
       } catch (err) {
-        document.getElementById("output").textContent = `Unexpected error:\n${err.message}`;
+        document.getElementById("aiOutput").textContent = "Error processing upload.";
       }
     });
   </script>
 </body>
 </html>
-
-</body>
-</html>
-
