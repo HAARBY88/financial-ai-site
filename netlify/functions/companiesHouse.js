@@ -1,4 +1,4 @@
-const fetch = require("node-fetch");
+const fetch = require("node-fetch"); // CommonJS
 
 exports.handler = async function(event) {
   const companyNumber = event.queryStringParameters?.company;
@@ -19,10 +19,7 @@ exports.handler = async function(event) {
     const rawText = await response.text();
 
     if (!response.ok) {
-      return {
-        statusCode: response.status,
-        body: JSON.stringify({ error: `API request failed`, details: rawText })
-      };
+      return { statusCode: response.status, body: JSON.stringify({ error: `API request failed`, details: rawText }) };
     }
 
     const data = JSON.parse(rawText);
@@ -45,5 +42,7 @@ exports.handler = async function(event) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 };
+
+
 
 
