@@ -7,17 +7,30 @@ exports.handler = async function(event) {
   }
 
   try {
-    const url = `https://api.company-information.service.gov.uk/company/${companyNumber}/filing-history?items_per_page=50`;
+    const url = `https://api.company-information.service.gov.uk/company/${companyNumber}/filing-history?items_per_page=10`;
     const headers = {
       Authorization: `Basic ${Buffer.from(process.env.COMPANIES_HOUSE_KEY + ":").toString("base64")}`,
       Accept: "application/json"
     };
 
     const response = await fetch(url, { headers });
+
+    // Debug logging
+    console.log("Filing history status:", response.status);
+    console.log("Response headers:", response.headers.raw());
+
     const rawText = await response.text();
+    console.log("Raw response text:", rawText);
 
     if (!response.ok) {
-      return { statusCode: response.status, body: JSON.stringify({ error: `API request failed`, details: rawText }) };
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({ 
+          error: "API request failed", 
+          status: response.status, 
+          response: rawText 
+        })
+      };
     }
 
     const data = JSON.parse(rawText);
@@ -35,3 +48,5 @@ exports.handler = async function(event) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 };
+
+
