@@ -74,7 +74,7 @@
           return;
         }
 
-        // Display company info
+        // Display company info with link to Companies House
         const cardHTML = `
           <div class="card">
             <h2>${data.company_name} (${data.company_number})</h2>
@@ -92,6 +92,11 @@
             <h3>Confirmation Statement</h3>
             <p><strong>Last Made Up To:</strong> ${data.confirmation_statement.last_made_up_to}</p>
             <p><strong>Next Due:</strong> ${data.confirmation_statement.next_due}</p>
+
+            <h3>Official Companies House Page</h3>
+            <p><a href="https://find-and-update.company-information.service.gov.uk/company/${data.company_number}" target="_blank">
+              View on Companies House
+            </a></p>
           </div>
         `;
         resultDiv.innerHTML = cardHTML;
@@ -183,6 +188,4 @@
 </body>
 </html>
 
-</body>
-</html>
 
