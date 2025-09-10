@@ -1,68 +1,102 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Companies House Accounts</title>
-  <style>
-    body { font-family: Arial; max-width: 700px; margin: auto; padding: 20px; }
-    h1, h2 { color: #333; }
-    form { margin-bottom: 20px; }
-    ul { padding-left: 20px; }
-  </style>
+<meta charset="UTF-8">
+<title>Financial AI Filing Analysis</title>
+<style>
+  body { font-family: Arial; max-width: 800px; margin: auto; padding: 20px; }
+  h1,h2 { color: #333; }
+  label { display: block; margin: 10px 0 5px; }
+  input { padding: 5px; width: 200px; }
+  button { padding: 5px 10px; margin-top: 10px; }
+  ul { list-style: none; padding-left: 0; }
+  li { margin-bottom: 5px; }
+</style>
 </head>
 <body>
-  <h1>Fetch Company Accounts</h1>
+<h1>Financial AI Filing Analysis</h1>
 
-  <form id="companyForm">
-    <label>Company Number:
-      <input type="text" name="company" required placeholder="e.g. 08470590">
-    </label>
-    <button type="submit">Fetch</button>
-  </form>
+<form id="companyForm">
+  <label>Company Number:</label>
+  <input type="text" name="company" placeholder="e.g. 08470590" required>
+  <button type="submit">Search</button>
+</form>
 
-  <h2>Company Info</h2>
-  <pre id="companyInfo">Info will appear here...</pre>
+<h2>Company Info</h2>
+<pre id="companyInfo">Enter a company number to fetch details...</pre>
 
-  <h2>Last 10 Accounts Filings</h2>
-  <ul id="filings"></ul>
+<h2>Filing History (Accounts)</h2>
+<ul id="filings"></ul>
 
-  <script>
-    async function fetchCompany(companyNumber) {
-      const res = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
-      const data = await res.json();
-      if(data.error) {
-        document.getElementById("companyInfo").textContent = data.error;
-        return null;
-      }
-      document.getElementById("companyInfo").textContent = 
-        `Name: ${data.company_name}\nStatus: ${data.company_status}\nRegistered Office: ${data.registered_office_address.address_line_1 || ""}, ${data.registered_office_address.locality || ""}\nCompanies House Page: https://find-and-update.company-information.service.gov.uk/company/${data.company_number}`;
-      return data;
+<button id="analyzeBtn">Analyze Selected</button>
+
+<h2>AI Accounting Analysis</h2>
+<pre id="analysis">No analysis returned.</pre>
+
+<script>
+  let selectedFilings = [];
+
+  async function fetchCompany(companyNumber) {
+    const res = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
+    const data = await res.json();
+    if(data.error) {
+      document.getElementById("companyInfo").textContent = data.error;
+      return null;
     }
+    let infoText = `${data.company_name} (${data.company_number})\nStatus: ${data.company_status}\nType: ${data.type}\nDate of Creation: ${data.date_of_creation}\n\nRegistered Office:\n${data.registered_office_address.address_line_1 || ''}, ${data.registered_office_address.locality || ''}, ${data.registered_office_address.postal_code || ''}\n\nAccounts:\nLast Made Up To: ${data.accounts.last_made_up_to || 'N/A'}\nNext Due: ${data.accounts.next_due || 'N/A'}\n\nConfirmation Statement:\nLast Made Up To: ${data.confirmation_statement.last_made_up_to || 'N/A'}\nNext Due: ${data.confirmation_statement.next_due || 'N/A'}`;
+    infoText += `\n\nCompanies House Page: https://find-and-update.company-information.service.gov.uk/company/${data.company_number}`;
+    document.getElementById("companyInfo").textContent = infoText;
+    return data;
+  }
 
-    async function fetchFilings(companyNumber) {
-      const res = await fetch(`/.netlify/functions/filingHistory?company=${companyNumber}`);
-      const data = await res.json();
-      const ul = document.getElementById("filings");
-      ul.innerHTML = "";
-      if(data.items && data.items.length > 0) {
-        data.items.forEach(f => {
-          const li = document.createElement("li");
-          li.innerHTML = `${f.date} - ${f.description || f.type} <a href="https://find-and-update.company-information.service.gov.uk/company/${companyNumber}/filing-history" target="_blank">View</a>`;
-          ul.appendChild(li);
+  async function fetchFilings(companyNumber) {
+    const res = await fetch(`/.netlify/functions/filingHistory?company=${companyNumber}`);
+    const data = await res.json();
+    const ul = document.getElementById("filings");
+    ul.innerHTML = "";
+    selectedFilings = [];
+    if(data.items && data.items.length > 0){
+      data.items.forEach((f, idx) => {
+        const li = document.createElement("li");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = idx;
+        checkbox.addEventListener("change", (e)=>{
+          if(e.target.checked) selectedFilings.push(f);
+          else selectedFilings = selectedFilings.filter(x=>x!==f);
         });
-      } else {
-        ul.innerHTML = "<li>No filings found.</li>";
-      }
+        li.appendChild(checkbox);
+        const text = document.createTextNode(` ${f.date} - ${f.description || f.type} `);
+        li.appendChild(text);
+        const link = document.createElement("a");
+        link.href = `https://find-and-update.company-information.service.gov.uk/company/${companyNumber}/filing-history`;
+        link.target = "_blank";
+        link.textContent = "View";
+        li.appendChild(link);
+        ul.appendChild(li);
+      });
+    } else {
+      ul.innerHTML = "<li>No filings found.</li>";
     }
+  }
 
-    document.getElementById("companyForm").addEventListener("submit", async e => {
-      e.preventDefault();
-      const companyNumber = e.target.company.value.trim();
-      if(!companyNumber) return;
-      const info = await fetchCompany(companyNumber);
-      if(info) fetchFilings(companyNumber);
-    });
-  </script>
+  document.getElementById("companyForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const companyNumber = e.target.company.value.trim();
+    if(!companyNumber) return;
+    await fetchCompany(companyNumber);
+    await fetchFilings(companyNumber);
+  });
+
+  document.getElementById("analyzeBtn").addEventListener("click", () => {
+    if(selectedFilings.length === 0){
+      document.getElementById("analysis").textContent = "No filings selected.";
+      return;
+    }
+    // Placeholder for AI analysis integration
+    document.getElementById("analysis").textContent = `Analyzing ${selectedFilings.length} filings...`;
+  });
+</script>
 </body>
 </html>
 
