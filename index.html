@@ -7,46 +7,71 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 2rem;
-      max-width: 600px;
+      max-width: 700px;
       margin: auto;
+      padding: 2rem;
+      background: #f4f6f8;
+      color: #333;
     }
     h1 {
+      text-align: center;
       color: #004080;
     }
     form {
-      margin-bottom: 1rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
     }
     input {
       padding: 0.5rem;
       font-size: 1rem;
+      flex: 1;
     }
     button {
       padding: 0.5rem 1rem;
       font-size: 1rem;
-      margin-left: 0.5rem;
+      background: #004080;
+      color: white;
+      border: none;
       cursor: pointer;
     }
-    #result {
+    button:hover {
+      background: #0066cc;
+    }
+    .card {
+      background: white;
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       margin-top: 1rem;
-      padding: 1rem;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background: #f9f9f9;
-      white-space: pre-wrap;
-      font-family: monospace;
+    }
+    .card h2 {
+      margin-top: 0;
+      color: #004080;
+    }
+    .card p {
+      margin: 0.25rem 0;
+    }
+    .links a {
+      color: #0066cc;
+      text-decoration: none;
+      margin-right: 1rem;
+    }
+    .links a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
   <h1>Company Info Lookup</h1>
+
   <form id="lookupForm">
-    <label for="company">Enter Company Number:</label>
-    <input type="text" id="company" name="company" required />
+    <input type="text" id="company" name="company" placeholder="Enter company number" required />
     <button type="submit">Search</button>
   </form>
 
-  <div id="result">Results will appear here...</div>
+  <div id="result"></div>
 
   <script>
     document.getElementById("lookupForm").addEventListener("submit", async (e) => {
@@ -56,27 +81,56 @@
       const resultDiv = document.getElementById("result");
 
       if (!companyNumber) {
-        resultDiv.textContent = "⚠️ Please enter a company number.";
+        resultDiv.innerHTML = "<p>⚠️ Please enter a company number.</p>";
         return;
       }
 
-      resultDiv.textContent = "⏳ Fetching company info...";
+      resultDiv.innerHTML = "<p>⏳ Fetching company info...</p>";
 
       try {
-        const response = await fetch(
-          `/.netlify/functions/companiesHouse?company=${companyNumber}`
-        );
+        const response = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
         const data = await response.json();
 
-        if (response.ok) {
-          resultDiv.textContent = JSON.stringify(data, null, 2);
-        } else {
-          resultDiv.textContent = `❌ Error: ${data.error || "Unknown error"}`;
+        if (!response.ok) {
+          resultDiv.innerHTML = `<p>❌ Error: ${data.error || "Unknown error"}</p>`;
+          return;
         }
+
+        // Display the company info
+        const cardHTML = `
+          <div class="card">
+            <h2>${data.company_name} (${data.company_number})</h2>
+            <p><strong>Status:</strong> ${data.company_status}</p>
+            <p><strong>Type:</strong> ${data.type}</p>
+            <p><strong>Date of Creation:</strong> ${data.date_of_creation}</p>
+
+            <h3>Registered Office</h3>
+            <p>${data.registered_office_address.address_line_1}, ${data.registered_office_address.locality}, ${data.registered_office_address.postal_code}</p>
+
+            <h3>Accounts</h3>
+            <p><strong>Last Made Up To:</strong> ${data.accounts.last_accounts.made_up_to}</p>
+            <p><strong>Next Due:</strong> ${data.accounts.next_due}</p>
+
+            <h3>Confirmation Statement</h3>
+            <p><strong>Last Made Up To:</strong> ${data.confirmation_statement.last_made_up_to}</p>
+            <p><strong>Next Due:</strong> ${data.confirmation_statement.next_due}</p>
+
+            <h3>Quick Links</h3>
+            <div class="links">
+              <a href="https://find-and-update.company-information.service.gov.uk${data.links.filing_history}" target="_blank">Filing History</a>
+              <a href="https://find-and-update.company-information.service.gov.uk${data.links.officers}" target="_blank">Officers</a>
+              <a href="https://find-and-update.company-information.service.gov.uk${data.links.persons_with_significant_control}" target="_blank">PSCs</a>
+            </div>
+          </div>
+        `;
+
+        resultDiv.innerHTML = cardHTML;
+
       } catch (err) {
-        resultDiv.textContent = `⚠️ Unexpected error: ${err.message}`;
+        resultDiv.innerHTML = `<p>⚠️ Unexpected error: ${err.message}</p>`;
       }
     });
   </script>
 </body>
 </html>
+
