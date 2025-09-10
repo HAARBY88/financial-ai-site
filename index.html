@@ -13,50 +13,16 @@
       background: #f4f6f8;
       color: #333;
     }
-    h1, h2, h3 {
-      color: #004080;
-    }
-    form {
-      display: flex;
-      gap: 0.5rem;
-      margin-bottom: 1.5rem;
-    }
-    input {
-      flex: 1;
-      padding: 0.5rem;
-      font-size: 1rem;
-    }
-    button {
-      padding: 0.5rem 1rem;
-      font-size: 1rem;
-      background: #004080;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
+    h1, h2, h3 { color: #004080; }
+    form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    input { flex: 1; padding: 0.5rem; font-size: 1rem; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; background: #004080; color: white; border: none; cursor: pointer; }
     button:hover { background: #0066cc; }
-    .card {
-      background: white;
-      padding: 1rem 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      margin-top: 1rem;
-    }
-    .links a {
-      color: #0066cc;
-      text-decoration: none;
-      margin-right: 1rem;
-    }
+    .card { background: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); margin-top: 1rem; }
+    .links a { color: #0066cc; text-decoration: none; margin-right: 1rem; }
     .links a:hover { text-decoration: underline; }
-    #filingHistory div {
-      margin-bottom: 0.5rem;
-    }
-    pre {
-      background: #f4f4f4;
-      padding: 1rem;
-      border-radius: 5px;
-      overflow-x: auto;
-    }
+    #filingHistory div { margin-bottom: 0.5rem; }
+    pre { background: #f4f4f4; padding: 1rem; border-radius: 5px; overflow-x: auto; }
   </style>
 </head>
 <body>
@@ -80,9 +46,6 @@
   <div id="aiOutput">Analysis will appear here...</div>
 
   <script>
-    // --------------------------
-    // 1️⃣ Form submit handler
-    // --------------------------
     document.getElementById("lookupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
@@ -101,9 +64,7 @@
       historyDiv.innerHTML = "Fetching filing history...";
 
       try {
-        // --------------------------
-        // 2️⃣ Fetch company info from Netlify function
-        // --------------------------
+        // Fetch company info
         const response = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
         const data = await response.json();
 
@@ -113,9 +74,7 @@
           return;
         }
 
-        // --------------------------
-        // 3️⃣ Display company info card
-        // --------------------------
+        // Display company info
         const cardHTML = `
           <div class="card">
             <h2>${data.company_name} (${data.company_number})</h2>
@@ -137,9 +96,7 @@
         `;
         resultDiv.innerHTML = cardHTML;
 
-        // --------------------------
-        // 4️⃣ Fetch filing history AFTER company info is shown
-        // --------------------------
+        // Fetch filing history
         fetchFilingHistory(companyNumber);
 
       } catch (err) {
@@ -148,9 +105,6 @@
       }
     });
 
-    // --------------------------
-    // 5️⃣ Fetch filing history and display with checkboxes
-    // --------------------------
     async function fetchFilingHistory(companyNumber) {
       const historyDiv = document.getElementById("filingHistory");
       historyDiv.innerHTML = "⏳ Fetching filing history...";
@@ -164,8 +118,11 @@
           return;
         }
 
-        // Filter for accounts filings only
-        const filings = data.items.filter(f => f.type.toLowerCase().includes("accounts"));
+        // Improved filter: check both type and description (case-insensitive)
+        const filings = data.items.filter(f => {
+          return (f.type && f.type.toLowerCase().includes("accounts")) ||
+                 (f.description && f.description.toLowerCase().includes("accounts"));
+        });
 
         if (filings.length === 0) {
           historyDiv.innerHTML = "<p>No accounts filings found.</p>";
@@ -183,9 +140,6 @@
         listHTML += `<button id="analyzeSelected">Analyze Selected</button>`;
         historyDiv.innerHTML = listHTML;
 
-        // --------------------------
-        // 6️⃣ Analyze selected filings via AI
-        // --------------------------
         document.getElementById("analyzeSelected").addEventListener("click", async () => {
           const selected = Array.from(historyDiv.querySelectorAll("input[type=checkbox]:checked"));
           if (selected.length === 0) {
@@ -200,9 +154,6 @@
       }
     }
 
-    // --------------------------
-    // 7️⃣ Send selected filings to AI function
-    // --------------------------
     async function processSelectedFilings(selectedFilings) {
       const aiOutputDiv = document.getElementById("aiOutput");
       aiOutputDiv.innerHTML = "⏳ Analyzing selected filings with AI...";
@@ -210,8 +161,8 @@
       try {
         const formData = new FormData();
 
+        // Add selected filings for processing
         selectedFilings.forEach((f, idx) => {
-          // Add placeholder names; your processUpload.js will handle the files
           formData.append(`file${idx}`, f.value); 
         });
         formData.append("topic", "Accounting analysis");
@@ -231,3 +182,7 @@
   </script>
 </body>
 </html>
+
+</body>
+</html>
+
