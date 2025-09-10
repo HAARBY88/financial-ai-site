@@ -14,10 +14,23 @@ exports.handler = async function(event) {
     };
 
     const response = await fetch(url, { headers });
+
+    // Debug logging: status and headers
+    console.log("Companies House status:", response.status);
+    console.log("Response headers:", response.headers.raw());
+
     const rawText = await response.text();
+    console.log("Raw response text:", rawText);
 
     if (!response.ok) {
-      return { statusCode: response.status, body: JSON.stringify({ error: `API request failed`, details: rawText }) };
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({ 
+          error: "API request failed", 
+          status: response.status, 
+          response: rawText 
+        })
+      };
     }
 
     const data = JSON.parse(rawText);
@@ -41,5 +54,6 @@ exports.handler = async function(event) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 };
+
 
 
