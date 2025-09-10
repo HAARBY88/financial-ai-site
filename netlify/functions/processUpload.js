@@ -3,9 +3,7 @@ import multiparty from "multiparty";
 import fs from "fs";
 import pdfParse from "pdf-parse";
 
-export const config = {
-  api: { bodyParser: false }
-};
+export const config = { api: { bodyParser: false } };
 
 export async function handler(event) {
   if (event.httpMethod !== "POST") {
@@ -23,8 +21,6 @@ export async function handler(event) {
 
     const filePath = formData.files.statement[0].path;
     const fileData = fs.readFileSync(filePath);
-
-    // For now, only PDF parsing
     const pdfText = await pdfParse(fileData);
     const extractedText = pdfText.text;
 
@@ -32,7 +28,6 @@ export async function handler(event) {
     const topic = formData.fields.topic[0];
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -41,12 +36,9 @@ export async function handler(event) {
       ]
     });
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ output: response.choices[0].message.content })
-    };
+    return { statusCode: 200, body: JSON.stringify({ output: response.choices[0].message.content }) };
   } catch (err) {
-    console.error("Error:", err);
+    console.error("Upload error:", err);
     return { statusCode: 500, body: JSON.stringify({ error: "Processing failed." }) };
   }
 }
