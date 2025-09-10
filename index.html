@@ -2,102 +2,65 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Company Filing History Analysis</title>
+  <title>Companies House Accounts</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 900px; margin: auto; padding: 20px; }
+    body { font-family: Arial; max-width: 700px; margin: auto; padding: 20px; }
     h1, h2 { color: #333; }
     form { margin-bottom: 20px; }
-    ul { list-style: none; padding: 0; }
-    li { margin-bottom: 10px; }
-    a { color: #0074D9; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    .error { color: red; }
+    ul { padding-left: 20px; }
   </style>
 </head>
 <body>
-  <h1>Company Filing History Analysis</h1>
+  <h1>Fetch Company Accounts</h1>
 
   <form id="companyForm">
-    <label>
-      Company Number: 
-      <input type="text" name="company" placeholder="e.g. 08470590" required>
+    <label>Company Number:
+      <input type="text" name="company" required placeholder="e.g. 08470590">
     </label>
-    <button type="submit">Fetch Filings</button>
+    <button type="submit">Fetch</button>
   </form>
 
   <h2>Company Info</h2>
-  <pre id="companyInfo">Company info will appear here...</pre>
+  <pre id="companyInfo">Info will appear here...</pre>
 
-  <h2>Accounts Filings (last 20)</h2>
-  <ul id="filingsList">
-    <li>No filings fetched yet.</li>
-  </ul>
+  <h2>Last 10 Accounts Filings</h2>
+  <ul id="filings"></ul>
 
   <script>
-    const form = document.getElementById("companyForm");
-    const companyInfoEl = document.getElementById("companyInfo");
-    const filingsListEl = document.getElementById("filingsList");
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-
-      const companyNumber = e.target.company.value.trim();
-      if (!companyNumber) return;
-
-      companyInfoEl.textContent = "Fetching company info...";
-      filingsListEl.innerHTML = "<li>Fetching filings...</li>";
-
-      try {
-        // 1. Fetch basic company info
-        const infoRes = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
-        const infoData = await infoRes.json();
-
-        if (infoData.error) {
-          companyInfoEl.textContent = "Error fetching company info: " + infoData.error;
-          filingsListEl.innerHTML = "<li class='error'>Cannot fetch filings.</li>";
-          return;
-        }
-
-        // Display company info
-        companyInfoEl.textContent = `
-Name: ${infoData.company_name}
-Number: ${infoData.company_number}
-Status: ${infoData.company_status}
-Registered Office: ${infoData.registered_office_address.address_line_1}, ${infoData.registered_office_address.locality}, ${infoData.registered_office_address.postal_code}
-Companies House Page: https://find-and-update.company-information.service.gov.uk/company/${companyNumber}
-`;
-
-        // 2. Fetch filings
-        const filingsRes = await fetch(`/.netlify/functions/filingHistory?company=${companyNumber}`);
-        const filingsData = await filingsRes.json();
-
-        if (filingsData.error) {
-          filingsListEl.innerHTML = `<li class="error">Error fetching filings: ${filingsData.error}</li>`;
-          return;
-        }
-
-        if (!filingsData.items || filingsData.items.length === 0) {
-          filingsListEl.innerHTML = "<li>No accounts filings found.</li>";
-          return;
-        }
-
-        // Display filings list
-        filingsListEl.innerHTML = "";
-        filingsData.items.forEach(f => {
-          const li = document.createElement("li");
-          const filingDate = new Date(f.date).toLocaleDateString();
-          const filingDescription = f.description || f.type || "Accounts";
-          const filingLink = `https://find-and-update.company-information.service.gov.uk/company/${companyNumber}/filing-history/${f.transaction_id}`;
-
-          li.innerHTML = `<strong>${filingDate}:</strong> ${filingDescription} — <a href="${filingLink}" target="_blank">View on Companies House</a>`;
-          filingsListEl.appendChild(li);
-        });
-
-      } catch (err) {
-        console.error("Error:", err);
-        companyInfoEl.textContent = "Unexpected error fetching company info.";
-        filingsListEl.innerHTML = `<li class="error">Unexpected error fetching filings: ${err.message}</li>`;
+    async function fetchCompany(companyNumber) {
+      const res = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
+      const data = await res.json();
+      if(data.error) {
+        document.getElementById("companyInfo").textContent = data.error;
+        return null;
       }
+      document.getElementById("companyInfo").textContent = 
+        `Name: ${data.company_name}\nStatus: ${data.company_status}\nRegistered Office: ${data.registered_office_address.address_line_1 || ""}, ${data.registered_office_address.locality || ""}\nCompanies House Page: https://find-and-update.company-information.service.gov.uk/company/${data.company_number}`;
+      return data;
+    }
+
+    async function fetchFilings(companyNumber) {
+      const res = await fetch(`/.netlify/functions/filingHistory?company=${companyNumber}`);
+      const data = await res.json();
+      const ul = document.getElementById("filings");
+      ul.innerHTML = "";
+      if(data.items && data.items.length > 0) {
+        data.items.forEach(f => {
+          const li = document.createElement("li");
+          li.innerHTML = `${f.date} - ${f.description || f.type} <a href="https://find-and-update.company-information.service.gov.uk/company/${companyNumber}/filing-history" target="_blank">View</a>`;
+          ul.appendChild(li);
+        });
+      } else {
+        ul.innerHTML = "<li>No filings found.</li>";
+      }
+    }
+
+    document.getElementById("companyForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const companyNumber = e.target.company.value.trim();
+      if(!companyNumber) return;
+      const info = await fetchCompany(companyNumber);
+      if(info) fetchFilings(companyNumber);
     });
   </script>
 </body>
