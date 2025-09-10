@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Company Info & Filing History</title>
+  <title>Financial AI Filing Analysis</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      max-width: 800px;
+      max-width: 900px;
       margin: auto;
       padding: 2rem;
       background: #f4f6f8;
@@ -17,15 +17,14 @@
       color: #004080;
     }
     form {
-      margin-bottom: 1.5rem;
       display: flex;
       gap: 0.5rem;
-      justify-content: center;
+      margin-bottom: 1.5rem;
     }
     input {
+      flex: 1;
       padding: 0.5rem;
       font-size: 1rem;
-      flex: 1;
     }
     button {
       padding: 0.5rem 1rem;
@@ -35,9 +34,7 @@
       border: none;
       cursor: pointer;
     }
-    button:hover {
-      background: #0066cc;
-    }
+    button:hover { background: #0066cc; }
     .card {
       background: white;
       padding: 1rem 1.5rem;
@@ -45,70 +42,80 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       margin-top: 1rem;
     }
-    .card h2 {
-      margin-top: 0;
-    }
-    .card p {
-      margin: 0.25rem 0;
-    }
     .links a {
       color: #0066cc;
       text-decoration: none;
       margin-right: 1rem;
     }
-    .links a:hover {
-      text-decoration: underline;
-    }
-    #filingHistory {
-      margin-top: 1rem;
-    }
+    .links a:hover { text-decoration: underline; }
     #filingHistory div {
       margin-bottom: 0.5rem;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 1rem;
+      border-radius: 5px;
+      overflow-x: auto;
     }
   </style>
 </head>
 <body>
-  <h1>Company Info & Filing History</h1>
+  <h1>Financial AI Filing Analysis</h1>
 
+  <!-- Company lookup form -->
   <form id="lookupForm">
     <input type="text" id="company" name="company" placeholder="Enter company number" required />
     <button type="submit">Search</button>
   </form>
 
+  <!-- Company info card -->
   <div id="result">Company info will appear here...</div>
 
-  <h3>Filing History</h3>
+  <!-- Filing history -->
+  <h3>Filing History (Accounts)</h3>
   <div id="filingHistory">Select a company above to view filings...</div>
+
+  <!-- AI analysis output -->
+  <h3>AI Accounting Analysis</h3>
+  <div id="aiOutput">Analysis will appear here...</div>
 
   <script>
     // --------------------------
-    // Submit handler for company info
+    // 1️⃣ Form submit handler
     // --------------------------
     document.getElementById("lookupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
       const companyNumber = document.getElementById("company").value.trim();
       const resultDiv = document.getElementById("result");
+      const historyDiv = document.getElementById("filingHistory");
+      const aiOutputDiv = document.getElementById("aiOutput");
 
+      aiOutputDiv.innerHTML = "";
       if (!companyNumber) {
         resultDiv.innerHTML = "<p>⚠️ Please enter a company number.</p>";
         return;
       }
 
       resultDiv.innerHTML = "<p>⏳ Fetching company info...</p>";
-      document.getElementById("filingHistory").innerHTML = "Fetching filing history...";
+      historyDiv.innerHTML = "Fetching filing history...";
 
       try {
-        // Fetch company info
+        // --------------------------
+        // 2️⃣ Fetch company info from Netlify function
+        // --------------------------
         const response = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
         const data = await response.json();
 
         if (!response.ok) {
           resultDiv.innerHTML = `<p>❌ Error: ${data.error || "Unknown error"}</p>`;
+          historyDiv.innerHTML = "";
           return;
         }
 
-        // Display company info
+        // --------------------------
+        // 3️⃣ Display company info card
+        // --------------------------
         const cardHTML = `
           <div class="card">
             <h2>${data.company_name} (${data.company_number})</h2>
@@ -126,28 +133,23 @@
             <h3>Confirmation Statement</h3>
             <p><strong>Last Made Up To:</strong> ${data.confirmation_statement.last_made_up_to}</p>
             <p><strong>Next Due:</strong> ${data.confirmation_statement.next_due}</p>
-
-            <h3>Quick Links</h3>
-            <div class="links">
-              <a href="https://find-and-update.company-information.service.gov.uk${data.links.filing_history}" target="_blank">Filing History</a>
-              <a href="https://find-and-update.company-information.service.gov.uk${data.links.officers}" target="_blank">Officers</a>
-              <a href="https://find-and-update.company-information.service.gov.uk${data.links.persons_with_significant_control}" target="_blank">PSCs</a>
-            </div>
           </div>
         `;
-
         resultDiv.innerHTML = cardHTML;
 
-        // Fetch filing history after showing company info
+        // --------------------------
+        // 4️⃣ Fetch filing history AFTER company info is shown
+        // --------------------------
         fetchFilingHistory(companyNumber);
 
       } catch (err) {
         resultDiv.innerHTML = `<p>⚠️ Unexpected error: ${err.message}</p>`;
+        historyDiv.innerHTML = "";
       }
     });
 
     // --------------------------
-    // Function to fetch and display filing history
+    // 5️⃣ Fetch filing history and display with checkboxes
     // --------------------------
     async function fetchFilingHistory(companyNumber) {
       const historyDiv = document.getElementById("filingHistory");
@@ -162,7 +164,7 @@
           return;
         }
 
-        // Filter only accounts / financial statements
+        // Filter for accounts filings only
         const filings = data.items.filter(f => f.type.toLowerCase().includes("accounts"));
 
         if (filings.length === 0) {
@@ -178,25 +180,52 @@
           </div>
         `).join("");
 
-        listHTML += `<button id="downloadSelected">Download Selected</button>`;
-
+        listHTML += `<button id="analyzeSelected">Analyze Selected</button>`;
         historyDiv.innerHTML = listHTML;
 
-        // Add download button functionality
-        document.getElementById("downloadSelected").addEventListener("click", () => {
+        // --------------------------
+        // 6️⃣ Analyze selected filings via AI
+        // --------------------------
+        document.getElementById("analyzeSelected").addEventListener("click", async () => {
           const selected = Array.from(historyDiv.querySelectorAll("input[type=checkbox]:checked"));
           if (selected.length === 0) {
-            alert("Select at least one filing to download");
+            alert("Select at least one filing to analyze");
             return;
           }
-          selected.forEach(f => {
-            // Open document in new tab (Companies House PDF)
-            window.open(`https://document-api.company-information.service.gov.uk/document/${f.value}/content`, "_blank");
-          });
+          await processSelectedFilings(selected);
         });
 
       } catch (err) {
         historyDiv.innerHTML = `⚠️ Unexpected error: ${err.message}`;
+      }
+    }
+
+    // --------------------------
+    // 7️⃣ Send selected filings to AI function
+    // --------------------------
+    async function processSelectedFilings(selectedFilings) {
+      const aiOutputDiv = document.getElementById("aiOutput");
+      aiOutputDiv.innerHTML = "⏳ Analyzing selected filings with AI...";
+
+      try {
+        const formData = new FormData();
+
+        selectedFilings.forEach((f, idx) => {
+          // Add placeholder names; your processUpload.js will handle the files
+          formData.append(`file${idx}`, f.value); 
+        });
+        formData.append("topic", "Accounting analysis");
+
+        const aiRes = await fetch("/.netlify/functions/processUpload", {
+          method: "POST",
+          body: formData
+        });
+
+        const aiData = await aiRes.json();
+        aiOutputDiv.innerHTML = `<pre>${aiData.output || "No analysis returned."}</pre>`;
+
+      } catch (err) {
+        aiOutputDiv.innerHTML = `⚠️ Error analyzing filings: ${err.message}`;
       }
     }
   </script>
