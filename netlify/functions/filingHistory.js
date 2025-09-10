@@ -1,18 +1,16 @@
-const fetch = require("node-fetch"); // CommonJS
+const fetch = require("node-fetch");
 
 exports.handler = async function(event) {
   const companyNumber = event.queryStringParameters?.company;
-
   if (!companyNumber) {
     return { statusCode: 400, body: JSON.stringify({ error: "Company number is required" }) };
   }
 
   try {
     const url = `https://api.company-information.service.gov.uk/company/${companyNumber}/filing-history?items_per_page=50`;
-
     const headers = {
       Authorization: `Basic ${Buffer.from(process.env.COMPANIES_HOUSE_KEY + ":").toString("base64")}`,
-      "Accept": "application/json"
+      Accept: "application/json"
     };
 
     const response = await fetch(url, { headers });
@@ -28,12 +26,12 @@ exports.handler = async function(event) {
       .filter(f => (f.type && f.type.toLowerCase().includes("accounts")) ||
                    (f.description && f.description.toLowerCase().includes("accounts")))
       .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 10); // last 10 accounts only
+      .slice(0, 10);
 
     return { statusCode: 200, body: JSON.stringify({ items: filings }) };
 
   } catch (err) {
-    console.error("Unexpected error fetching filings:", err);
+    console.error("Error fetching filings:", err);
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 };
