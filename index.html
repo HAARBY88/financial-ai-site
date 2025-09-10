@@ -116,11 +116,7 @@
           return;
         }
 
-        // Filter for accounts filings and show last 20
-        const filings = data.items.filter(f => 
-          (f.type && f.type.toLowerCase().includes("accounts")) || 
-          (f.description && f.description.toLowerCase().includes("accounts"))
-        ).slice(0, 20);
+        const filings = data.items;
 
         if (filings.length === 0) {
           historyDiv.innerHTML = "<p>No accounts filings found.</p>";
@@ -158,11 +154,7 @@
 
       try {
         const formData = new FormData();
-
-        // Add selected filings for processing
-        selectedFilings.forEach((f, idx) => {
-          formData.append(`file${idx}`, f.value); 
-        });
+        selectedFilings.forEach((f, idx) => formData.append(`file${idx}`, f.value));
         formData.append("topic", "Accounting analysis");
 
         const aiRes = await fetch("/.netlify/functions/processUpload", {
