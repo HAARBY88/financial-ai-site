@@ -2,70 +2,79 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>AI Financial Tools</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Company Info Lookup</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 700px; margin: auto; padding: 20px; }
-    h1 { color: #333; }
-    form { margin-bottom: 20px; }
-    pre { background: #f4f4f4; padding: 15px; white-space: pre-wrap; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      max-width: 600px;
+      margin: auto;
+    }
+    h1 {
+      color: #004080;
+    }
+    form {
+      margin-bottom: 1rem;
+    }
+    input {
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      margin-left: 0.5rem;
+      cursor: pointer;
+    }
+    #result {
+      margin-top: 1rem;
+      padding: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background: #f9f9f9;
+      white-space: pre-wrap;
+      font-family: monospace;
+    }
   </style>
 </head>
 <body>
-  <h1>Company Info + AI Analysis</h1>
-
-  <h2>1. Fetch Company Info (Companies House)</h2>
-  <form id="companyForm">
-    <label>Company Number:
-      <input type="text" name="company" required placeholder="e.g. 00000006">
-    </label>
-    <button type="submit">Fetch Info</button>
+  <h1>Company Info Lookup</h1>
+  <form id="lookupForm">
+    <label for="company">Enter Company Number:</label>
+    <input type="text" id="company" name="company" required />
+    <button type="submit">Search</button>
   </form>
-  <pre id="companyOutput">Company info will appear here...</pre>
 
-  <h2>2. Upload Financial Statements for AI Analysis</h2>
-  <form id="uploadForm" enctype="multipart/form-data">
-    <label>Financial Statement (PDF only for now):
-      <input type="file" name="statement" accept=".pdf" required>
-    </label><br><br>
-    <label>Framework:
-      <select name="framework" required>
-        <option value="IFRS">IFRS</option>
-        <option value="US GAAP">US GAAP</option>
-      </select>
-    </label><br><br>
-    <label>Topic:
-      <input type="text" name="topic" placeholder="e.g. Revenue Recognition" required>
-    </label><br><br>
-    <button type="submit">Upload & Analyse</button>
-  </form>
-  <pre id="aiOutput">AI analysis will appear here...</pre>
+  <div id="result">Results will appear here...</div>
 
   <script>
-    // Fetch Companies House info
-    document.getElementById("companyForm").addEventListener("submit", async (e) => {
+    document.getElementById("lookupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const companyNumber = e.target.company.value;
-      document.getElementById("companyOutput").textContent = "Fetching...";
-      try {
-        const res = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
-        const data = await res.json();
-        document.getElementById("companyOutput").textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        document.getElementById("companyOutput").textContent = "Error fetching company info.";
-      }
-    });
 
-    // Upload and process financials
-    document.getElementById("uploadForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      document.getElementById("aiOutput").textContent = "Processing...";
+      const companyNumber = document.getElementById("company").value.trim();
+      const resultDiv = document.getElementById("result");
+
+      if (!companyNumber) {
+        resultDiv.textContent = "⚠️ Please enter a company number.";
+        return;
+      }
+
+      resultDiv.textContent = "⏳ Fetching company info...";
+
       try {
-        const res = await fetch("/.netlify/functions/processUpload", { method: "POST", body: formData });
-        const data = await res.json();
-        document.getElementById("aiOutput").textContent = data.output || "No output.";
+        const response = await fetch(
+          `/.netlify/functions/companiesHouse?company=${companyNumber}`
+        );
+        const data = await response.json();
+
+        if (response.ok) {
+          resultDiv.textContent = JSON.stringify(data, null, 2);
+        } else {
+          resultDiv.textContent = `❌ Error: ${data.error || "Unknown error"}`;
+        }
       } catch (err) {
-        document.getElementById("aiOutput").textContent = "Error processing upload.";
+        resultDiv.textContent = `⚠️ Unexpected error: ${err.message}`;
       }
     });
   </script>
