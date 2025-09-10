@@ -16,42 +16,26 @@ exports.handler = async function(event) {
     };
 
     const response = await fetch(url, { headers });
-
     const rawText = await response.text();
 
-    console.log("API Response Status:", response.status);
-    console.log("API Response Text:", rawText);
-
     if (!response.ok) {
-      return {
-        statusCode: response.status,
-        body: JSON.stringify({
-          error: `API request failed with status ${response.status}`,
-          details: rawText
-        })
-      };
+      return { statusCode: response.status, body: JSON.stringify({ error: `API request failed`, details: rawText }) };
     }
 
     const data = JSON.parse(rawText);
 
-    // Filter for accounts filings, sort latest first, limit to last 20
     const filings = data.items
       .filter(f => (f.type && f.type.toLowerCase().includes("accounts")) ||
                    (f.description && f.description.toLowerCase().includes("accounts")))
       .sort((a, b) => new Date(b.date) - new Date(a.date))
       .slice(0, 20);
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ items: filings })
-    };
+    return { statusCode: 200, body: JSON.stringify({ items: filings }) };
 
   } catch (err) {
     console.error("Unexpected error fetching filings:", err);
-
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Unexpected error fetching filings", details: err.message })
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 };
+
+
