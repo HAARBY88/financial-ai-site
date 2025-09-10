@@ -1,7 +1,6 @@
-export async function handler(event) {
-  // Import node-fetch dynamically for Netlify ES module compatibility
-  const fetch = (await import('node-fetch')).default;
+const fetch = require("node-fetch");
 
+exports.handler = async function(event) {
   const companyNumber = event.queryStringParameters?.company;
 
   if (!companyNumber) {
@@ -11,17 +10,15 @@ export async function handler(event) {
   try {
     const url = `https://api.company-information.service.gov.uk/company/${companyNumber}/filing-history?items_per_page=50`;
 
-    // Basic Auth header with API key
     const headers = {
       Authorization: `Basic ${Buffer.from(process.env.COMPANIES_HOUSE_KEY + ":").toString("base64")}`,
       "Accept": "application/json"
     };
 
-    // Fetch filings from Companies House
     const response = await fetch(url, { headers });
 
-    // Debug: log raw status and text for easier troubleshooting
     const rawText = await response.text();
+
     console.log("API Response Status:", response.status);
     console.log("API Response Text:", rawText);
 
@@ -35,7 +32,6 @@ export async function handler(event) {
       };
     }
 
-    // Parse JSON
     const data = JSON.parse(rawText);
 
     // Filter for accounts filings, sort latest first, limit to last 20
@@ -58,4 +54,4 @@ export async function handler(event) {
       body: JSON.stringify({ error: "Unexpected error fetching filings", details: err.message })
     };
   }
-}
+};
