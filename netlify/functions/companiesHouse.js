@@ -16,25 +16,17 @@ exports.handler = async function(event) {
     };
 
     const response = await fetch(url, { headers });
-
     const rawText = await response.text();
-
-    console.log("API Response Status:", response.status);
-    console.log("API Response Text:", rawText);
 
     if (!response.ok) {
       return {
         statusCode: response.status,
-        body: JSON.stringify({
-          error: `API request failed with status ${response.status}`,
-          details: rawText
-        })
+        body: JSON.stringify({ error: `API request failed`, details: rawText })
       };
     }
 
     const data = JSON.parse(rawText);
 
-    // Return only the fields needed for frontend
     const companyInfo = {
       company_name: data.company_name,
       company_number: data.company_number,
@@ -46,17 +38,12 @@ exports.handler = async function(event) {
       links: data.links
     };
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify(companyInfo)
-    };
+    return { statusCode: 200, body: JSON.stringify(companyInfo) };
 
   } catch (err) {
-    console.error("Unexpected error fetching company info:", err);
-
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Unexpected error fetching company info", details: err.message })
-    };
+    console.error("Unexpected error:", err);
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 };
+
+
