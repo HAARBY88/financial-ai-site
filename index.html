@@ -5,15 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Financial AI Filing Analysis</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 900px;
-      margin: auto;
-      padding: 2rem;
-      background: #f4f6f8;
-      color: #333;
-    }
-    h1, h2, h3 { color: #004080; }
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: auto; padding: 2rem; background: #f4f6f8; color: #333; }
+    h1,h2,h3 { color: #004080; }
     form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
     input { flex: 1; padding: 0.5rem; font-size: 1rem; }
     button { padding: 0.5rem 1rem; font-size: 1rem; background: #004080; color: white; border: none; cursor: pointer; }
@@ -123,11 +116,11 @@
           return;
         }
 
-        // Improved filter: check both type and description (case-insensitive)
-        const filings = data.items.filter(f => {
-          return (f.type && f.type.toLowerCase().includes("accounts")) ||
-                 (f.description && f.description.toLowerCase().includes("accounts"));
-        });
+        // Filter for accounts filings and show last 20
+        const filings = data.items.filter(f => 
+          (f.type && f.type.toLowerCase().includes("accounts")) || 
+          (f.description && f.description.toLowerCase().includes("accounts"))
+        ).slice(0, 20);
 
         if (filings.length === 0) {
           historyDiv.innerHTML = "<p>No accounts filings found.</p>";
