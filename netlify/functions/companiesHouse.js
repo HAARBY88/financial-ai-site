@@ -1,54 +1,62 @@
-// netlify/functions/companiesHouse.js
+const fetch = require("node-fetch");
 
-exports.handler = async function(event, context) {
+exports.handler = async function(event) {
+  const companyNumber = event.queryStringParameters?.company;
+
+  if (!companyNumber) {
+    return { statusCode: 400, body: JSON.stringify({ error: "Company number is required" }) };
+  }
+
   try {
-    // Example: company number passed as query ?company=00000006
-    const { company } = event.queryStringParameters || {};
-    if (!company) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Missing company number (?company=XXXX)" })
-      };
-    }
+    const url = `https://api.company-information.service.gov.uk/company/${companyNumber}`;
 
-    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
-    if (!apiKey) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "API key not configured in Netlify" })
-      };
-    }
+    const headers = {
+      Authorization: `Basic ${Buffer.from(process.env.COMPANIES_HOUSE_KEY + ":").toString("base64")}`,
+      "Accept": "application/json"
+    };
 
-    // Call Companies House API
-    const response = await fetch(
-      `https://api.company-information.service.gov.uk/company/${company}`,
-      {
-        headers: {
-          Authorization: "Basic " + Buffer.from(apiKey + ":").toString("base64")
-        }
-      }
-    );
+    const response = await fetch(url, { headers });
+
+    const rawText = await response.text();
+
+    console.log("API Response Status:", response.status);
+    console.log("API Response Text:", rawText);
 
     if (!response.ok) {
       return {
         statusCode: response.status,
-        body: JSON.stringify({ error: "Companies House API error", status: response.status })
+        body: JSON.stringify({
+          error: `API request failed with status ${response.status}`,
+          details: rawText
+        })
       };
     }
 
-    const data = await response.json();
+    const data = JSON.parse(rawText);
+
+    // Return only the fields needed for frontend
+    const companyInfo = {
+      company_name: data.company_name,
+      company_number: data.company_number,
+      company_status: data.company_status,
+      registered_office_address: data.registered_office_address || {},
+      date_of_creation: data.date_of_creation,
+      jurisdiction: data.jurisdiction,
+      sic_codes: data.sic_codes,
+      links: data.links
+    };
 
     return {
       statusCode: 200,
-      body: JSON.stringify(data)
+      body: JSON.stringify(companyInfo)
     };
+
   } catch (err) {
+    console.error("Unexpected error fetching company info:", err);
+
     return {
       statusCode: 500,
-      body: JSON.stringify({
-        error: "Unexpected server error",
-        details: err.message
-      })
+      body: JSON.stringify({ error: "Unexpected error fetching company info", details: err.message })
     };
   }
 };
