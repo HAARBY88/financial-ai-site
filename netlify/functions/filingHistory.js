@@ -1,4 +1,4 @@
-const fetch = require("node-fetch");
+const fetch = require("node-fetch"); // node-fetch v2
 
 exports.handler = async function(event) {
   const companyNumber = event.queryStringParameters?.company;
@@ -24,11 +24,12 @@ exports.handler = async function(event) {
 
     const data = JSON.parse(rawText);
 
+    // Filter only filings related to Accounts
     const filings = data.items
       .filter(f => (f.type && f.type.toLowerCase().includes("accounts")) ||
                    (f.description && f.description.toLowerCase().includes("accounts")))
       .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 20);
+      .slice(0, 10); // <-- last 10 accounts
 
     return { statusCode: 200, body: JSON.stringify({ items: filings }) };
 
@@ -37,5 +38,6 @@ exports.handler = async function(event) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 };
+
 
 
