@@ -1,13 +1,9 @@
 {
   "name": "financial-ai-site",
   "version": "1.0.0",
-  "description": "Financial AI site with Companies House integration",
-  "main": "index.js",
-  "scripts": {},
+  "description": "Financial AI Filing Analysis",
   "dependencies": {
     "node-fetch": "2.6.7"
   }
 }
-
-
 
