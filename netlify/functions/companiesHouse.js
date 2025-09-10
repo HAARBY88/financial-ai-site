@@ -1,26 +1,54 @@
-import fetch from "node-fetch";
+// netlify/functions/companiesHouse.js
 
-export async function handler(event) {
+exports.handler = async function(event, context) {
   try {
-    const companyNumber = event.queryStringParameters.company;
-    if (!companyNumber) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Missing company number" }) };
+    // Example: company number passed as query ?company=00000006
+    const { company } = event.queryStringParameters || {};
+    if (!company) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing company number (?company=XXXX)" })
+      };
     }
 
     const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
-    const authHeader = "Basic " + Buffer.from(apiKey + ":").toString("base64");
+    if (!apiKey) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "API key not configured in Netlify" })
+      };
+    }
 
-    const url = `https://api.company-information.service.gov.uk/company/${companyNumber}`;
-    const response = await fetch(url, { headers: { Authorization: authHeader } });
+    // Call Companies House API
+    const response = await fetch(
+      `https://api.company-information.service.gov.uk/company/${company}`,
+      {
+        headers: {
+          Authorization: "Basic " + Buffer.from(apiKey + ":").toString("base64")
+        }
+      }
+    );
 
     if (!response.ok) {
-      return { statusCode: response.status, body: JSON.stringify({ error: "Companies House API error" }) };
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({ error: "Companies House API error", status: response.status })
+      };
     }
 
     const data = await response.json();
-    return { statusCode: 200, body: JSON.stringify(data) };
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify(data)
+    };
   } catch (err) {
-    console.error("Error:", err);
-    return { statusCode: 500, body: JSON.stringify({ error: "Server error" }) };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: "Unexpected server error",
+        details: err.message
+      })
+    };
   }
-}
+};
