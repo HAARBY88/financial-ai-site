@@ -14,13 +14,11 @@
       color: #333;
     }
     h1, h2, h3 { color: #004080; }
-    form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
-    input { flex: 1; padding: 0.5rem; font-size: 1rem; }
+    form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    input, select { flex: 1; padding: 0.5rem; font-size: 1rem; }
     button { padding: 0.5rem 1rem; font-size: 1rem; background: #004080; color: white; border: none; cursor: pointer; }
     button:hover { background: #0066cc; }
     .card { background: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); margin-top: 1rem; }
-    .links a { color: #0066cc; text-decoration: none; margin-right: 1rem; }
-    .links a:hover { text-decoration: underline; }
     #filingHistory div { margin-bottom: 0.5rem; }
     pre { background: #f4f4f4; padding: 1rem; border-radius: 5px; overflow-x: auto; }
     .error { color: red; font-weight: bold; }
@@ -36,19 +34,31 @@
     <button type="submit">Search</button>
   </form>
 
-  <!-- Company info card -->
+  <!-- Company info -->
   <div id="result">Company info will appear here...</div>
 
   <!-- Filing history -->
   <h3>Filing History (Accounts)</h3>
   <div id="filingHistory">Select a company above to view filings...</div>
 
-  <!-- AI analysis output -->
+  <!-- IFRS Topic selection -->
+  <h3>Choose IFRS Topic</h3>
+  <select id="ifrsTopic">
+    <option value="">-- Select a topic --</option>
+    <option value="Revenue">Revenue</option>
+    <option value="Leases">Leases</option>
+    <option value="Financial Instruments">Financial Instruments</option>
+    <option value="Assets">Assets</option>
+    <option value="Liabilities">Liabilities</option>
+    <option value="Equity">Equity</option>
+  </select>
+
+  <!-- AI analysis -->
   <h3>AI Accounting Analysis</h3>
   <div id="aiOutput">Analysis will appear here...</div>
 
   <script>
-    // Handle form submission
+    // --- Company search form ---
     document.getElementById("lookupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
@@ -71,43 +81,23 @@
         const data = await response.json();
 
         if (!response.ok) {
-          let msg = data.error || "Unknown error";
-          if (msg.includes("Invalid Authorization")) msg = "❌ Invalid API key (check Netlify environment variable).";
-          if (response.status === 404) msg = "❌ Company not found. Please check the number.";
-          resultDiv.innerHTML = `<p class='error'>${msg}</p>`;
+          resultDiv.innerHTML = `<p class='error'>❌ Error: ${data.error || "Unknown error"}</p>`;
           return;
         }
 
-        // Company info card
-        const cardHTML = `
+        resultDiv.innerHTML = `
           <div class="card">
             <h2>${data.company_name} (${data.company_number})</h2>
             <p><strong>Status:</strong> ${data.company_status}</p>
             <p><strong>Type:</strong> ${data.type}</p>
             <p><strong>Date of Creation:</strong> ${data.date_of_creation}</p>
-
             <h3>Registered Office</h3>
             <p>${data.registered_office_address?.address_line_1 || ""}, 
                ${data.registered_office_address?.locality || ""}, 
                ${data.registered_office_address?.postal_code || ""}</p>
-
-            <h3>Accounts</h3>
-            <p><strong>Last Made Up To:</strong> ${data.accounts?.last_accounts?.made_up_to || "N/A"}</p>
-            <p><strong>Next Due:</strong> ${data.accounts?.next_due || "N/A"}</p>
-
-            <h3>Confirmation Statement</h3>
-            <p><strong>Last Made Up To:</strong> ${data.confirmation_statement?.last_made_up_to || "N/A"}</p>
-            <p><strong>Next Due:</strong> ${data.confirmation_statement?.next_due || "N/A"}</p>
-
-            <h3>Official Companies House Page</h3>
-            <p><a href="https://find-and-update.company-information.service.gov.uk/company/${data.company_number}" target="_blank">
-              View on Companies House
-            </a></p>
           </div>
         `;
-        resultDiv.innerHTML = cardHTML;
 
-        // Fetch filing history
         fetchFilingHistory(companyNumber);
 
       } catch (err) {
@@ -115,7 +105,7 @@
       }
     });
 
-    // Fetch filing history
+    // --- Filing history ---
     async function fetchFilingHistory(companyNumber) {
       const historyDiv = document.getElementById("filingHistory");
       historyDiv.innerHTML = "<p class='loading'>⏳ Fetching filing history...</p>";
@@ -125,10 +115,7 @@
         const data = await response.json();
 
         if (!response.ok) {
-          let msg = data.error || "Unknown error";
-          if (msg.includes("Invalid Authorization")) msg = "❌ Invalid API key (check Netlify environment variable).";
-          if (response.status === 404) msg = "❌ No filing history found.";
-          historyDiv.innerHTML = `<p class='error'>${msg}</p>`;
+          historyDiv.innerHTML = `<p class='error'>❌ Error fetching filings: ${data.error || "Unknown error"}</p>`;
           return;
         }
 
@@ -142,10 +129,7 @@
           return;
         }
 
-        // Show up to 10 filings
-        const limitedFilings = filings.slice(0, 10);
-
-        let listHTML = limitedFilings.map((f, idx) => `
+        let listHTML = filings.slice(0, 10).map((f, idx) => `
           <div>
             <input type="checkbox" id="filing${idx}" value="${f.links.document_metadata}" />
             <label for="filing${idx}">${f.date} - ${f.description}</label>
@@ -169,7 +153,7 @@
       }
     }
 
-    // Process selected filings with AI
+    // --- Send selected filings & IFRS topic to backend ---
     async function processSelectedFilings(selectedFilings) {
       const aiOutputDiv = document.getElementById("aiOutput");
       aiOutputDiv.innerHTML = "<p class='loading'>⏳ Analyzing selected filings with AI...</p>";
@@ -177,9 +161,11 @@
       try {
         const formData = new FormData();
         selectedFilings.forEach((f, idx) => {
-          formData.append(`file${idx}`, f.value); 
+          formData.append(`file${idx}`, f.value);
         });
-        formData.append("topic", "Accounting analysis");
+
+        const topic = document.getElementById("ifrsTopic").value;
+        formData.append("topic", topic || "General Accounting Analysis");
 
         const aiRes = await fetch("/.netlify/functions/processUpload", {
           method: "POST",
@@ -196,3 +182,5 @@
   </script>
 </body>
 </html>
+
+
