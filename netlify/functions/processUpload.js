@@ -20,6 +20,20 @@ let ifrsSummary = "";
   }
 })();
 
+// Helper: extract relevant section for chosen topic
+function getIFRSSection(topic) {
+  if (!ifrsSummary || !topic) return "";
+  const lowerText = ifrsSummary.toLowerCase();
+  const lowerTopic = topic.toLowerCase();
+  const idx = lowerText.indexOf(lowerTopic);
+  if (idx === -1) {
+    return ifrsSummary.slice(0, 2000); // fallback: first 2000 chars
+  }
+  const start = Math.max(0, idx - 1000); // grab context before
+  const end = Math.min(ifrsSummary.length, idx + 3000); // grab context after
+  return ifrsSummary.slice(start, end);
+}
+
 export async function handler(event) {
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
@@ -38,7 +52,7 @@ export async function handler(event) {
     const topic = formData.fields.topic ? formData.fields.topic[0] : "General Accounting Analysis";
     const userQuestion = formData.fields.question ? formData.fields.question[0] : "";
 
-    // Collect selected filings (links.document_metadata from front end)
+    // Collect selected filings
     const filings = Object.keys(formData.fields)
       .filter(k => k.startsWith("file"))
       .map(k => formData.fields[k][0]);
@@ -75,12 +89,15 @@ export async function handler(event) {
       return { statusCode: 500, body: JSON.stringify({ error: "No text could be extracted from filings" }) };
     }
 
-    // Send to OpenAI (filings + IFRS summary + user’s question)
+    // Pick relevant IFRS section
+    const ifrsSection = getIFRSSection(topic);
+
+    // Send to OpenAI
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     const messages = [
       { role: "system", content: "You are an expert accountant skilled in IFRS and US GAAP." },
-      { role: "user", content: `Here is a summary of IFRS standards (from 'IFRS in Your Pocket'):\n${ifrsSummary}` },
+      { role: "user", content: `Here is the relevant section of IFRS (from 'IFRS in Your Pocket') for topic '${topic}':\n${ifrsSection}` },
       { role: "user", content: `Here are the company filings:\n${combinedText}` },
       { role: "user", content: `Focus on the topic: ${topic}.` }
     ];
@@ -103,8 +120,6 @@ export async function handler(event) {
     console.error("Processing error:", err);
     return { statusCode: 500, body: JSON.stringify({ error: "Processing failed", details: err.message }) };
   }
-}
-
 }
 
 
