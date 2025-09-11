@@ -73,7 +73,7 @@
 
   <!-- IFRS Topic selection -->
   <h3>Choose IFRS Topic</h3>
-  <select id="ifrsTopic">
+  <select id="ifrsTopic" style="width:100%;">
     <option value="">-- Select a topic --</option>
     <option value="Revenue">Revenue</option>
     <option value="Leases">Leases</option>
@@ -85,7 +85,13 @@
 
   <!-- Custom question box -->
   <h3>Your Question</h3>
-  <textarea id="userQuestion" rows="3" placeholder="Type the specific question you want AI to answer about this topic..."></textarea>
+  <textarea id="userQuestion" rows="4" style="width:100%;"
+    placeholder="Type the specific question you want AI to answer about this topic..."></textarea>
+
+  <!-- Analyze button (moved to bottom) -->
+  <div style="margin-top: 1rem;">
+    <button id="analyzeSelected">Analyze Selected</button>
+  </div>
 
   <!-- AI analysis -->
   <h3>AI Accounting Analysis</h3>
@@ -204,6 +210,7 @@
           return;
         }
 
+        // Show checkboxes only
         let listHTML = filings.slice(0, 10).map((f, idx) => `
           <div>
             <input type="checkbox" id="filing${idx}" value="${f.links.document_metadata}" />
@@ -211,22 +218,23 @@
           </div>
         `).join("");
 
-        listHTML += `<button id="analyzeSelected">Analyze Selected</button>`;
         historyDiv.innerHTML = listHTML;
-
-        document.getElementById("analyzeSelected").addEventListener("click", async () => {
-          const selected = Array.from(historyDiv.querySelectorAll("input[type=checkbox]:checked"));
-          if (selected.length === 0) {
-            alert("Select at least one filing to analyze");
-            return;
-          }
-          await processSelectedFilings(selected);
-        });
 
       } catch (err) {
         historyDiv.innerHTML = `<p class='error'>⚠️ Unexpected error: ${err.message}</p>`;
       }
     }
+
+    // --- Analyze button (fixed at bottom) ---
+    document.getElementById("analyzeSelected").addEventListener("click", async () => {
+      const historyDiv = document.getElementById("filingHistory");
+      const selected = Array.from(historyDiv.querySelectorAll("input[type=checkbox]:checked"));
+      if (selected.length === 0) {
+        alert("Select at least one filing to analyze");
+        return;
+      }
+      await processSelectedFilings(selected);
+    });
 
     // --- Send filings, topic, and question to backend ---
     async function processSelectedFilings(selectedFilings) {
@@ -262,5 +270,7 @@
   </script>
 </body>
 </html>
+
+
 
 
