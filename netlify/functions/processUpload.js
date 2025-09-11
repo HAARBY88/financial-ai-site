@@ -26,7 +26,7 @@ export async function handler(event) {
   }
 
   try {
-    // Parse form submission (filing links + topic)
+    // Parse form submission (filing links + topic + question)
     const form = new multiparty.Form();
     const formData = await new Promise((resolve, reject) => {
       form.parse(event, (err, fields) => {
@@ -35,7 +35,8 @@ export async function handler(event) {
       });
     });
 
-    const topic = formData.fields.topic ? formData.fields.topic[0] : "Accounting analysis";
+    const topic = formData.fields.topic ? formData.fields.topic[0] : "General Accounting Analysis";
+    const userQuestion = formData.fields.question ? formData.fields.question[0] : "";
 
     // Collect selected filings (links.document_metadata from front end)
     const filings = Object.keys(formData.fields)
@@ -74,16 +75,23 @@ export async function handler(event) {
       return { statusCode: 500, body: JSON.stringify({ error: "No text could be extracted from filings" }) };
     }
 
-    // Send to OpenAI (filings + IFRS summary)
+    // Send to OpenAI (filings + IFRS summary + user’s question)
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    const messages = [
+      { role: "system", content: "You are an expert accountant skilled in IFRS and US GAAP." },
+      { role: "user", content: `Here is a summary of IFRS standards (from 'IFRS in Your Pocket'):\n${ifrsSummary}` },
+      { role: "user", content: `Here are the company filings:\n${combinedText}` },
+      { role: "user", content: `Focus on the topic: ${topic}.` }
+    ];
+
+    if (userQuestion) {
+      messages.push({ role: "user", content: `Question: ${userQuestion}` });
+    }
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "You are an expert accountant skilled in IFRS and US GAAP." },
-        { role: "user", content: `Here is a summary of IFRS standards (from 'IFRS in Your Pocket'):\n${ifrsSummary}` },
-        { role: "user", content: `Here are the company filings:\n${combinedText}` },
-        { role: "user", content: `Compare the filings against IFRS requirements and provide feedback on ${topic}.` }
-      ]
+      messages
     });
 
     return {
@@ -96,4 +104,7 @@ export async function handler(event) {
     return { statusCode: 500, body: JSON.stringify({ error: "Processing failed", details: err.message }) };
   }
 }
+
+}
+
 
