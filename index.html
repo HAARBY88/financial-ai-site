@@ -37,6 +37,10 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       margin-top: 1rem;
     }
+    ul { list-style: none; padding: 0; }
+    li { margin: 0.5rem 0; }
+    li a { text-decoration: none; color: #004080; }
+    li a:hover { text-decoration: underline; }
     #filingHistory div { margin-bottom: 0.5rem; }
     pre {
       background: #f4f4f4;
@@ -51,11 +55,14 @@
 <body>
   <h1>Financial AI Filing Analysis</h1>
 
-  <!-- Company lookup form -->
+  <!-- Company search form -->
   <form id="lookupForm">
-    <input type="text" id="company" name="company" placeholder="Enter company number" required />
+    <input type="text" id="company" name="company" placeholder="Enter company name" required />
     <button type="submit">Search</button>
   </form>
+
+  <!-- Search results -->
+  <div id="searchResults"></div>
 
   <!-- Company info -->
   <div id="result">Company info will appear here...</div>
@@ -85,21 +92,58 @@
   <div id="aiOutput">Analysis will appear here...</div>
 
   <script>
-    // --- Company search form ---
+    // --- Search companies by name ---
     document.getElementById("lookupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
-      const companyNumber = document.getElementById("company").value.trim();
+      const query = document.getElementById("company").value.trim();
+      const resultsDiv = document.getElementById("searchResults");
       const resultDiv = document.getElementById("result");
       const historyDiv = document.getElementById("filingHistory");
       const aiOutputDiv = document.getElementById("aiOutput");
 
       aiOutputDiv.innerHTML = "";
-      if (!companyNumber) {
-        resultDiv.innerHTML = "<p class='error'>⚠️ Please enter a company number.</p>";
+      resultDiv.innerHTML = "";
+      historyDiv.innerHTML = "";
+
+      if (!query) {
+        resultsDiv.innerHTML = "<p class='error'>⚠️ Please enter a company name.</p>";
         return;
       }
 
+      resultsDiv.innerHTML = "<p class='loading'>⏳ Searching companies...</p>";
+
+      try {
+        const res = await fetch(`/.netlify/functions/searchCompanies?q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.items || data.items.length === 0) {
+          resultsDiv.innerHTML = "<p class='error'>❌ No companies found</p>";
+          return;
+        }
+
+        // Show a list of matching companies
+        let listHTML = "<h3>Select a company:</h3><ul>";
+        data.items.forEach(item => {
+          listHTML += `<li><a href="#" onclick="selectCompany('${item.company_number}')">
+            ${item.title} (${item.company_number})
+          </a></li>`;
+        });
+        listHTML += "</ul>";
+        resultsDiv.innerHTML = listHTML;
+
+      } catch (err) {
+        resultsDiv.innerHTML = `<p class='error'>⚠️ Error searching: ${err.message}</p>`;
+      }
+    });
+
+    // --- When user selects a company ---
+    async function selectCompany(companyNumber) {
+      const resultDiv = document.getElementById("result");
+      const historyDiv = document.getElementById("filingHistory");
+      const aiOutputDiv = document.getElementById("aiOutput");
+
+      aiOutputDiv.innerHTML = "";
       resultDiv.innerHTML = "<p class='loading'>⏳ Fetching company info...</p>";
       historyDiv.innerHTML = "";
 
@@ -122,6 +166,10 @@
             <p>${data.registered_office_address?.address_line_1 || ""}, 
                ${data.registered_office_address?.locality || ""}, 
                ${data.registered_office_address?.postal_code || ""}</p>
+            <h3>Official Companies House Page</h3>
+            <p><a href="https://find-and-update.company-information.service.gov.uk/company/${data.company_number}" target="_blank">
+              View on Companies House
+            </a></p>
           </div>
         `;
 
@@ -130,7 +178,7 @@
       } catch (err) {
         resultDiv.innerHTML = `<p class='error'>⚠️ Unexpected error: ${err.message}</p>`;
       }
-    });
+    }
 
     // --- Filing history ---
     async function fetchFilingHistory(companyNumber) {
