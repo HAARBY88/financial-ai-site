@@ -1,59 +1,66 @@
-const fetch = require("node-fetch");
+// companiesHouse.js
+import fetch from "node-fetch";
 
-exports.handler = async function(event) {
-  const companyNumber = event.queryStringParameters?.company;
+export async function handler(event) {
+  const companyNumber = event.queryStringParameters.company;
+
   if (!companyNumber) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Company number is required" }) };
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: "Company number is required" })
+    };
   }
 
   try {
-    const url = `https://api.company-information.service.gov.uk/company/${companyNumber}`;
-    const headers = {
-      Authorization: `Basic ${Buffer.from(process.env.COMPANIES_HOUSE_KEY + ":").toString("base64")}`,
-      Accept: "application/json"
-    };
+    // ✅ Build Basic Auth header correctly
+    const authHeader =
+      "Basic " +
+      Buffer.from(`${process.env.COMPANIES_HOUSE_KEY}:`).toString("base64");
 
-    const response = await fetch(url, { headers });
+    // ✅ Request company profile
+    const response = await fetch(
+      `https://api.company-information.service.gov.uk/company/${companyNumber}`,
+      {
+        headers: {
+          Authorization: authHeader
+        }
+      }
+    );
 
-    // Debug logging: status and headers
+    // Log response status for debugging
     console.log("Companies House status:", response.status);
-    console.log("Response headers:", response.headers.raw());
 
-    const rawText = await response.text();
-    console.log("Raw response text:", rawText);
+    const text = await response.text();
+
+    // Try to parse JSON, otherwise return error
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      console.error("Raw response text:", text);
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({ error: "Non-JSON response from API" })
+      };
+    }
 
     if (!response.ok) {
       return {
         statusCode: response.status,
-        body: JSON.stringify({ 
-          error: "API request failed", 
-          status: response.status, 
-          response: rawText 
-        })
+        body: JSON.stringify({ error: data.error || "API request failed" })
       };
     }
 
-    const data = JSON.parse(rawText);
-
-    const companyInfo = {
-      company_name: data.company_name,
-      company_number: data.company_number,
-      company_status: data.company_status,
-      type: data.type,
-      date_of_creation: data.date_of_creation,
-      registered_office_address: data.registered_office_address || {},
-      accounts: data.accounts || {},
-      confirmation_statement: data.confirmation_statement || {},
-      links: data.links
+    return {
+      statusCode: 200,
+      body: JSON.stringify(data)
     };
-
-    return { statusCode: 200, body: JSON.stringify(companyInfo) };
-
   } catch (err) {
-    console.error("Error fetching company:", err);
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: err.message })
+    };
   }
-};
-
+}
 
 
