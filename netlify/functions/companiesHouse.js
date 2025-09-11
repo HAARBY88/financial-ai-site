@@ -1,4 +1,3 @@
-// companiesHouse.js
 import fetch from "node-fetch";
 
 export async function handler(event) {
@@ -12,27 +11,21 @@ export async function handler(event) {
   }
 
   try {
-    // ✅ Build Basic Auth header correctly
+    // ✅ Correct Basic Auth header
     const authHeader =
       "Basic " +
       Buffer.from(`${process.env.COMPANIES_HOUSE_KEY}:`).toString("base64");
 
-    // ✅ Request company profile
     const response = await fetch(
       `https://api.company-information.service.gov.uk/company/${companyNumber}`,
       {
-        headers: {
-          Authorization: authHeader
-        }
+        headers: { Authorization: authHeader }
       }
     );
 
-    // Log response status for debugging
     console.log("Companies House status:", response.status);
 
     const text = await response.text();
-
-    // Try to parse JSON, otherwise return error
     let data;
     try {
       data = JSON.parse(text);
@@ -51,15 +44,9 @@ export async function handler(event) {
       };
     }
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify(data)
-    };
+    return { statusCode: 200, body: JSON.stringify(data) };
   } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message })
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 }
 
