@@ -1,27 +1,36 @@
-import fetch from "node-fetch";
+// netlify/functions/companiesHouse.js
+const fetch = require("node-fetch");
 
-export async function handler(event) {
-  const companyNumber = event.queryStringParameters.company;
-
-  if (!companyNumber) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: "Company number is required" })
-    };
-  }
-
+exports.handler = async (event) => {
   try {
-    // ✅ Correct Basic Auth header
-    const authHeader =
-      "Basic " +
-      Buffer.from(`${process.env.COMPANIES_HOUSE_KEY}:`).toString("base64");
+    const company = event.queryStringParameters.company;
+    if (!company) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing company number" })
+      };
+    }
 
-    const response = await fetch(
-      `https://api.company-information.service.gov.uk/company/${companyNumber}`,
-      {
-        headers: { Authorization: authHeader }
+    // Get API key from Netlify env
+    const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
+    if (!apiKey) {
+      console.error("❌ COMPANIES_HOUSE_API_KEY is not set in environment.");
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "Server misconfiguration: API key missing" })
+      };
+    }
+
+    // Build Basic Auth header (API_KEY + ":")
+    const auth = Buffer.from(`${apiKey}:`).toString("base64");
+
+    // Call Companies House API
+    const url = `https://api.company-information.service.gov.uk/company/${company}`;
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${auth}`
       }
-    );
+    });
 
     console.log("Companies House status:", response.status);
 
@@ -29,25 +38,33 @@ export async function handler(event) {
     let data;
     try {
       data = JSON.parse(text);
-    } catch (e) {
-      console.error("Raw response text:", text);
-      return {
-        statusCode: response.status,
-        body: JSON.stringify({ error: "Non-JSON response from API" })
-      };
+    } catch {
+      data = { raw: text };
     }
 
+    // Handle errors gracefully
     if (!response.ok) {
+      console.error("❌ Companies House error:", data);
       return {
         statusCode: response.status,
-        body: JSON.stringify({ error: data.error || "API request failed" })
+        body: JSON.stringify({
+          error: data.error || "Companies House API request failed",
+          details: data
+        })
       };
     }
 
-    return { statusCode: 200, body: JSON.stringify(data) };
+    // Success
+    return {
+      statusCode: 200,
+      body: JSON.stringify(data)
+    };
+
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    console.error("❌ Unexpected error:", err);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: err.message })
+    };
   }
-}
-
-
+};
