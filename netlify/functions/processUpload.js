@@ -2,9 +2,23 @@
 import OpenAI from "openai";
 import multiparty from "multiparty";
 import fetch from "node-fetch";
+import fs from "fs";
 import pdfParse from "pdf-parse";
 
 export const config = { api: { bodyParser: false } };
+
+// Load IFRS "In Your Pocket" PDF once when function starts
+let ifrsSummary = "";
+(async () => {
+  try {
+    const pdfBuffer = fs.readFileSync("docs/ifrs-pocket-2024.pdf");
+    const pdfData = await pdfParse(pdfBuffer);
+    ifrsSummary = pdfData.text;
+    console.log("✅ IFRS in Your Pocket loaded successfully.");
+  } catch (err) {
+    console.error("⚠️ Could not load IFRS PDF:", err);
+  }
+})();
 
 export async function handler(event) {
   if (event.httpMethod !== "POST") {
@@ -15,9 +29,9 @@ export async function handler(event) {
     // Parse form submission (filing links + topic)
     const form = new multiparty.Form();
     const formData = await new Promise((resolve, reject) => {
-      form.parse(event, (err, fields, files) => {
+      form.parse(event, (err, fields) => {
         if (err) reject(err);
-        else resolve({ fields, files });
+        else resolve({ fields });
       });
     });
 
@@ -39,7 +53,7 @@ export async function handler(event) {
     }
     const authHeader = "Basic " + Buffer.from(`${apiKey}:`).toString("base64");
 
-    // Fetch and parse each filing
+    // Fetch and parse each filing (PDF expected)
     let combinedText = "";
     for (const link of filings) {
       try {
@@ -60,13 +74,15 @@ export async function handler(event) {
       return { statusCode: 500, body: JSON.stringify({ error: "No text could be extracted from filings" }) };
     }
 
-    // Send to OpenAI
+    // Send to OpenAI (filings + IFRS summary)
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: "You are an expert accountant skilled in IFRS and US GAAP." },
-        { role: "user", content: `Analyze the following filings and explain ${topic}:\n${combinedText}` }
+        { role: "user", content: `Here is a summary of IFRS standards (from 'IFRS in Your Pocket'):\n${ifrsSummary}` },
+        { role: "user", content: `Here are the company filings:\n${combinedText}` },
+        { role: "user", content: `Compare the filings against IFRS requirements and provide feedback on ${topic}.` }
       ]
     });
 
