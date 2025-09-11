@@ -15,12 +15,35 @@
     }
     h1, h2, h3 { color: #004080; }
     form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-    input, select { flex: 1; padding: 0.5rem; font-size: 1rem; }
-    button { padding: 0.5rem 1rem; font-size: 1rem; background: #004080; color: white; border: none; cursor: pointer; }
+    input, select, textarea {
+      flex: 1;
+      padding: 0.5rem;
+      font-size: 1rem;
+      margin-top: 0.5rem;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      background: #004080;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
     button:hover { background: #0066cc; }
-    .card { background: white; padding: 1rem 1.5rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); margin-top: 1rem; }
+    .card {
+      background: white;
+      padding: 1rem 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin-top: 1rem;
+    }
     #filingHistory div { margin-bottom: 0.5rem; }
-    pre { background: #f4f4f4; padding: 1rem; border-radius: 5px; overflow-x: auto; }
+    pre {
+      background: #f4f4f4;
+      padding: 1rem;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
     .error { color: red; font-weight: bold; }
     .loading { color: #555; }
   </style>
@@ -52,6 +75,10 @@
     <option value="Liabilities">Liabilities</option>
     <option value="Equity">Equity</option>
   </select>
+
+  <!-- Custom question box -->
+  <h3>Your Question</h3>
+  <textarea id="userQuestion" rows="3" placeholder="Type the specific question you want AI to answer about this topic..."></textarea>
 
   <!-- AI analysis -->
   <h3>AI Accounting Analysis</h3>
@@ -153,7 +180,7 @@
       }
     }
 
-    // --- Send selected filings & IFRS topic to backend ---
+    // --- Send filings, topic, and question to backend ---
     async function processSelectedFilings(selectedFilings) {
       const aiOutputDiv = document.getElementById("aiOutput");
       aiOutputDiv.innerHTML = "<p class='loading'>⏳ Analyzing selected filings with AI...</p>";
@@ -166,6 +193,11 @@
 
         const topic = document.getElementById("ifrsTopic").value;
         formData.append("topic", topic || "General Accounting Analysis");
+
+        const userQuestion = document.getElementById("userQuestion").value.trim();
+        if (userQuestion) {
+          formData.append("question", userQuestion);
+        }
 
         const aiRes = await fetch("/.netlify/functions/processUpload", {
           method: "POST",
