@@ -23,6 +23,8 @@
     .links a:hover { text-decoration: underline; }
     #filingHistory div { margin-bottom: 0.5rem; }
     pre { background: #f4f4f4; padding: 1rem; border-radius: 5px; overflow-x: auto; }
+    .error { color: red; font-weight: bold; }
+    .loading { color: #555; }
   </style>
 </head>
 <body>
@@ -46,6 +48,7 @@
   <div id="aiOutput">Analysis will appear here...</div>
 
   <script>
+    // Handle form submission
     document.getElementById("lookupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
@@ -56,25 +59,26 @@
 
       aiOutputDiv.innerHTML = "";
       if (!companyNumber) {
-        resultDiv.innerHTML = "<p>⚠️ Please enter a company number.</p>";
+        resultDiv.innerHTML = "<p class='error'>⚠️ Please enter a company number.</p>";
         return;
       }
 
-      resultDiv.innerHTML = "<p>⏳ Fetching company info...</p>";
-      historyDiv.innerHTML = "Fetching filing history...";
+      resultDiv.innerHTML = "<p class='loading'>⏳ Fetching company info...</p>";
+      historyDiv.innerHTML = "";
 
       try {
-        // Fetch company info
         const response = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
         const data = await response.json();
 
         if (!response.ok) {
-          resultDiv.innerHTML = `<p>❌ Error: ${data.error || "Unknown error"}</p>`;
-          historyDiv.innerHTML = "";
+          let msg = data.error || "Unknown error";
+          if (msg.includes("Invalid Authorization")) msg = "❌ Invalid API key (check Netlify environment variable).";
+          if (response.status === 404) msg = "❌ Company not found. Please check the number.";
+          resultDiv.innerHTML = `<p class='error'>${msg}</p>`;
           return;
         }
 
-        // Display company info with link to Companies House
+        // Company info card
         const cardHTML = `
           <div class="card">
             <h2>${data.company_name} (${data.company_number})</h2>
@@ -83,15 +87,17 @@
             <p><strong>Date of Creation:</strong> ${data.date_of_creation}</p>
 
             <h3>Registered Office</h3>
-            <p>${data.registered_office_address.address_line_1}, ${data.registered_office_address.locality}, ${data.registered_office_address.postal_code}</p>
+            <p>${data.registered_office_address?.address_line_1 || ""}, 
+               ${data.registered_office_address?.locality || ""}, 
+               ${data.registered_office_address?.postal_code || ""}</p>
 
             <h3>Accounts</h3>
-            <p><strong>Last Made Up To:</strong> ${data.accounts.last_accounts.made_up_to}</p>
-            <p><strong>Next Due:</strong> ${data.accounts.next_due}</p>
+            <p><strong>Last Made Up To:</strong> ${data.accounts?.last_accounts?.made_up_to || "N/A"}</p>
+            <p><strong>Next Due:</strong> ${data.accounts?.next_due || "N/A"}</p>
 
             <h3>Confirmation Statement</h3>
-            <p><strong>Last Made Up To:</strong> ${data.confirmation_statement.last_made_up_to}</p>
-            <p><strong>Next Due:</strong> ${data.confirmation_statement.next_due}</p>
+            <p><strong>Last Made Up To:</strong> ${data.confirmation_statement?.last_made_up_to || "N/A"}</p>
+            <p><strong>Next Due:</strong> ${data.confirmation_statement?.next_due || "N/A"}</p>
 
             <h3>Official Companies House Page</h3>
             <p><a href="https://find-and-update.company-information.service.gov.uk/company/${data.company_number}" target="_blank">
@@ -105,25 +111,27 @@
         fetchFilingHistory(companyNumber);
 
       } catch (err) {
-        resultDiv.innerHTML = `<p>⚠️ Unexpected error: ${err.message}</p>`;
-        historyDiv.innerHTML = "";
+        resultDiv.innerHTML = `<p class='error'>⚠️ Unexpected error: ${err.message}</p>`;
       }
     });
 
+    // Fetch filing history
     async function fetchFilingHistory(companyNumber) {
       const historyDiv = document.getElementById("filingHistory");
-      historyDiv.innerHTML = "⏳ Fetching filing history...";
+      historyDiv.innerHTML = "<p class='loading'>⏳ Fetching filing history...</p>";
 
       try {
         const response = await fetch(`/.netlify/functions/filingHistory?company=${companyNumber}`);
         const data = await response.json();
 
         if (!response.ok) {
-          historyDiv.innerHTML = `<p>❌ Error fetching filings: ${data.error || "Unknown error"}</p>`;
+          let msg = data.error || "Unknown error";
+          if (msg.includes("Invalid Authorization")) msg = "❌ Invalid API key (check Netlify environment variable).";
+          if (response.status === 404) msg = "❌ No filing history found.";
+          historyDiv.innerHTML = `<p class='error'>${msg}</p>`;
           return;
         }
 
-        // Improved filter: check both type and description (case-insensitive)
         const filings = data.items.filter(f => {
           return (f.type && f.type.toLowerCase().includes("accounts")) ||
                  (f.description && f.description.toLowerCase().includes("accounts"));
@@ -134,8 +142,10 @@
           return;
         }
 
-        // Build checkbox list
-        let listHTML = filings.map((f, idx) => `
+        // Show up to 10 filings
+        const limitedFilings = filings.slice(0, 10);
+
+        let listHTML = limitedFilings.map((f, idx) => `
           <div>
             <input type="checkbox" id="filing${idx}" value="${f.links.document_metadata}" />
             <label for="filing${idx}">${f.date} - ${f.description}</label>
@@ -155,18 +165,17 @@
         });
 
       } catch (err) {
-        historyDiv.innerHTML = `⚠️ Unexpected error: ${err.message}`;
+        historyDiv.innerHTML = `<p class='error'>⚠️ Unexpected error: ${err.message}</p>`;
       }
     }
 
+    // Process selected filings with AI
     async function processSelectedFilings(selectedFilings) {
       const aiOutputDiv = document.getElementById("aiOutput");
-      aiOutputDiv.innerHTML = "⏳ Analyzing selected filings with AI...";
+      aiOutputDiv.innerHTML = "<p class='loading'>⏳ Analyzing selected filings with AI...</p>";
 
       try {
         const formData = new FormData();
-
-        // Add selected filings for processing
         selectedFilings.forEach((f, idx) => {
           formData.append(`file${idx}`, f.value); 
         });
@@ -181,7 +190,7 @@
         aiOutputDiv.innerHTML = `<pre>${aiData.output || "No analysis returned."}</pre>`;
 
       } catch (err) {
-        aiOutputDiv.innerHTML = `⚠️ Error analyzing filings: ${err.message}`;
+        aiOutputDiv.innerHTML = `<p class='error'>⚠️ Error analyzing filings: ${err.message}</p>`;
       }
     }
   </script>
