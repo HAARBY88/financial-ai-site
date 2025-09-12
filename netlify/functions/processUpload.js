@@ -20,7 +20,7 @@ let ifrsSummary = "";
   }
 })();
 
-// Helper: extract relevant section for chosen topic
+// Helper: extract relevant IFRS section
 function getIFRSSection(topic) {
   if (!ifrsSummary || !topic) return "";
   const lowerText = ifrsSummary.toLowerCase();
@@ -29,8 +29,8 @@ function getIFRSSection(topic) {
   if (idx === -1) {
     return ifrsSummary.slice(0, 2000); // fallback: first 2000 chars
   }
-  const start = Math.max(0, idx - 1000); // grab context before
-  const end = Math.min(ifrsSummary.length, idx + 3000); // grab context after
+  const start = Math.max(0, idx - 1000);
+  const end = Math.min(ifrsSummary.length, idx + 3000);
   return ifrsSummary.slice(start, end);
 }
 
@@ -40,7 +40,7 @@ export async function handler(event) {
   }
 
   try {
-    // Parse form submission (filing links + topic + question)
+    // Parse form submission
     const form = new multiparty.Form();
     const formData = await new Promise((resolve, reject) => {
       form.parse(event, (err, fields) => {
@@ -52,7 +52,7 @@ export async function handler(event) {
     const topic = formData.fields.topic ? formData.fields.topic[0] : "General Accounting Analysis";
     const userQuestion = formData.fields.question ? formData.fields.question[0] : "";
 
-    // Collect selected filings
+    // Collect selected filings (metadata URLs)
     const filings = Object.keys(formData.fields)
       .filter(k => k.startsWith("file"))
       .map(k => formData.fields[k][0]);
@@ -61,27 +61,49 @@ export async function handler(event) {
       return { statusCode: 400, body: JSON.stringify({ error: "No filings selected" }) };
     }
 
-    // Build auth header for Companies House Document API
+    // Build Companies House auth header
     const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
     if (!apiKey) {
       return { statusCode: 500, body: JSON.stringify({ error: "Missing Companies House API key" }) };
     }
     const authHeader = "Basic " + Buffer.from(`${apiKey}:`).toString("base64");
 
-    // Fetch and parse each filing (PDF expected)
+    // Fetch and parse filings
     let combinedText = "";
-    for (const link of filings) {
+    for (const metaUrl of filings) {
       try {
-        const res = await fetch(link, { headers: { Authorization: authHeader } });
+        // Fetch metadata first
+        const metaRes = await fetch(metaUrl, { headers: { Authorization: authHeader } });
+        if (!metaRes.ok) {
+          console.error(`⚠️ Failed to fetch metadata: ${metaUrl}`, await metaRes.text());
+          continue;
+        }
+        const metaData = await metaRes.json();
+
+        // Get document content URL
+        let contentUrl = null;
+        if (metaData.links?.document) {
+          contentUrl = `https://document-api.company-information.service.gov.uk${metaData.links.document}/content`;
+        } else if (metaData.links?.self) {
+          contentUrl = `https://document-api.company-information.service.gov.uk${metaData.links.self}/content`;
+        }
+
+        if (!contentUrl) {
+          console.error("⚠️ No document content URL in metadata:", metaData);
+          continue;
+        }
+
+        // Fetch the actual PDF
+        const res = await fetch(contentUrl, { headers: { Authorization: authHeader } });
         if (!res.ok) {
-          console.error(`Failed to fetch document: ${link}`, await res.text());
+          console.error(`⚠️ Failed to fetch document content: ${contentUrl}`, await res.text());
           continue;
         }
         const buffer = await res.buffer();
         const pdfData = await pdfParse(buffer);
-        combinedText += `\n\n--- Filing from ${link} ---\n\n${pdfData.text}`;
+        combinedText += `\n\n--- Filing from ${contentUrl} ---\n\n${pdfData.text}`;
       } catch (err) {
-        console.error("Error fetching/parsing filing:", err);
+        console.error("⚠️ Error fetching/parsing filing:", err);
       }
     }
 
@@ -89,19 +111,26 @@ export async function handler(event) {
       return { statusCode: 500, body: JSON.stringify({ error: "No text could be extracted from filings" }) };
     }
 
-    // Pick relevant IFRS section
+    // Extract relevant IFRS section
     const ifrsSection = getIFRSSection(topic);
+
+    // If AI key missing, return raw text for debugging
+    if (!process.env.OPENAI_API_KEY) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ output: `Debug Mode: No AI key.\n\nExtracted filings:\n${combinedText.slice(0, 1000)}...` })
+      };
+    }
 
     // Send to OpenAI
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     const messages = [
       { role: "system", content: "You are an expert accountant skilled in IFRS and US GAAP." },
-      { role: "user", content: `Here is the relevant section of IFRS (from 'IFRS in Your Pocket') for topic '${topic}':\n${ifrsSection}` },
-      { role: "user", content: `Here are the company filings:\n${combinedText}` },
-      { role: "user", content: `Focus on the topic: ${topic}.` }
+      { role: "user", content: `Relevant IFRS section for '${topic}':\n${ifrsSection}` },
+      { role: "user", content: `Company filings:\n${combinedText}` },
+      { role: "user", content: `Focus on topic: ${topic}.` }
     ];
-
     if (userQuestion) {
       messages.push({ role: "user", content: `Question: ${userQuestion}` });
     }
@@ -117,9 +146,11 @@ export async function handler(event) {
     };
 
   } catch (err) {
-    console.error("Processing error:", err);
+    console.error("❌ Processing error:", err);
     return { statusCode: 500, body: JSON.stringify({ error: "Processing failed", details: err.message }) };
   }
 }
+
+
 
 
