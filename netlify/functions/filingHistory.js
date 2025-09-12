@@ -40,21 +40,21 @@ export async function handler(event) {
 
     const data = await response.json();
 
-    // Filter account filings only
-    const filings = data.items.filter((f) => {
-      return (
+    // Filter: only filings that mention "accounts" AND have document_metadata
+    const filings = data.items.filter(
+      (f) =>
         f.description &&
         f.description.toLowerCase().includes("accounts") &&
-        f.links?.document_metadata
-      );
-    });
+        f.links &&
+        f.links.document_metadata
+    );
 
-    // Map to cleaner object
+    // Map to a clean structure
     const cleaned = filings.map((f) => ({
-      date: f.date,
-      description: f.description,
-      type: f.type,
-      category: f.category,
+      date: f.date || null,
+      description: f.description || "No description",
+      type: f.type || "N/A",
+      category: f.category || "N/A",
       document_metadata: f.links.document_metadata
     }));
 
@@ -70,6 +70,8 @@ export async function handler(event) {
     };
   }
 }
+
+
 
 
 
