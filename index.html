@@ -68,7 +68,7 @@
   <div id="result">Company info will appear here...</div>
 
   <!-- Filing history -->
-  <h3>Filing History (Accounts)</h3>
+  <h3>Filing History</h3>
   <div id="filingHistory">Select a company above to view filings...</div>
 
   <!-- IFRS Topic selection -->
@@ -88,7 +88,7 @@
   <textarea id="userQuestion" rows="4" style="width:100%;"
     placeholder="Type the specific question you want AI to answer about this topic..."></textarea>
 
-  <!-- Analyze button (moved to bottom) -->
+  <!-- Analyze button (bottom of page) -->
   <div style="margin-top: 1rem;">
     <button id="analyzeSelected">Analyze Selected</button>
   </div>
@@ -210,11 +210,14 @@
           return;
         }
 
-        // Show checkboxes only
+        // Show checkboxes with description + filing type code
         let listHTML = filings.slice(0, 10).map((f, idx) => `
           <div>
             <input type="checkbox" id="filing${idx}" value="${f.links.document_metadata}" />
-            <label for="filing${idx}">${f.date} - ${f.description}</label>
+            <label for="filing${idx}">
+              ${f.date} – ${f.description || "No description"} 
+              <em>(Type: ${f.type || "N/A"})</em>
+            </label>
           </div>
         `).join("");
 
@@ -270,6 +273,8 @@
   </script>
 </body>
 </html>
+
+
 
 
 
