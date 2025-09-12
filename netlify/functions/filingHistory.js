@@ -1,81 +1,76 @@
 // netlify/functions/filingHistory.js
-const fetch = require("node-fetch");
+import fetch from "node-fetch";
 
-exports.handler = async (event) => {
+export async function handler(event) {
+  const companyNumber = event.queryStringParameters.company;
+
+  if (!companyNumber) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: "Company number is required" })
+    };
+  }
+
   try {
-    const company = event.queryStringParameters.company;
-    if (!company) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Missing company number" })
-      };
-    }
-
-    // Get API key from Netlify env
     const apiKey = process.env.COMPANIES_HOUSE_API_KEY;
     if (!apiKey) {
-      console.error("❌ COMPANIES_HOUSE_API_KEY is not set in environment.");
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: "Server misconfiguration: API key missing" })
+        body: JSON.stringify({ error: "Missing Companies House API key" })
       };
     }
 
-    // Build Basic Auth header (API_KEY + ":")
-    const auth = Buffer.from(`${apiKey}:`).toString("base64");
+    const authHeader =
+      "Basic " + Buffer.from(`${apiKey}:`).toString("base64");
 
-    // Call Companies House filing history API
-    const url = `https://api.company-information.service.gov.uk/company/${company}/filing-history?items_per_page=50`;
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Basic ${auth}`
-      }
-    });
+    // Request last 25 filings
+    const response = await fetch(
+      `https://api.company-information.service.gov.uk/company/${companyNumber}/filing-history?items_per_page=25`,
+      { headers: { Authorization: authHeader } }
+    );
 
-    console.log("Filing history status:", response.status);
-
-    const text = await response.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { raw: text };
-    }
-
-    // Handle errors gracefully
     if (!response.ok) {
-      console.error("❌ Filing history error:", data);
+      const text = await response.text();
+      console.error("❌ Filing history fetch failed:", response.status, text);
       return {
         statusCode: response.status,
-        body: JSON.stringify({
-          error: data.error || "Companies House filing history request failed",
-          details: data
-        })
+        body: JSON.stringify({ error: "Failed to fetch filing history" })
       };
     }
 
-    // Filter filings: only "accounts"
-    const filings = (data.items || [])
-      .filter(f =>
-        (f.type && f.type.toLowerCase().includes("accounts")) ||
-        (f.description && f.description.toLowerCase().includes("accounts"))
-      )
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 10); // last 10 filings
+    const data = await response.json();
 
-    // Success
+    // Filter account filings only
+    const filings = data.items.filter((f) => {
+      return (
+        f.description &&
+        f.description.toLowerCase().includes("accounts") &&
+        f.links?.document_metadata
+      );
+    });
+
+    // Map to cleaner object
+    const cleaned = filings.map((f) => ({
+      date: f.date,
+      description: f.description,
+      type: f.type,
+      category: f.category,
+      document_metadata: f.links.document_metadata
+    }));
+
     return {
       statusCode: 200,
-      body: JSON.stringify({ items: filings })
+      body: JSON.stringify({ items: cleaned })
     };
-
   } catch (err) {
-    console.error("❌ Unexpected error:", err);
+    console.error("❌ Filing history error:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: err.message })
     };
   }
-};
+}
+
+
 
 
