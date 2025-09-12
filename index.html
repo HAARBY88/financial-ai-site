@@ -210,13 +210,30 @@
           return;
         }
 
-        // Show checkboxes with description + filing type code
+        // Helpers
+        function formatDate(dateStr) {
+          if (!dateStr) return "";
+          return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+        }
+
+        function formatDescription(f) {
+          const values = f.description_values || {};
+          const madeUpDate = values.made_up_date ? formatDate(values.made_up_date) : "";
+          const type = values.type ? values.type.charAt(0).toUpperCase() + values.type.slice(1) : "";
+          if (type && madeUpDate) {
+            return `${type} accounts made up to ${madeUpDate}`;
+          }
+          return f.description || "Unknown filing";
+        }
+
+        // Show checkboxes with formatted date, description, type code, and download link
         let listHTML = filings.slice(0, 10).map((f, idx) => `
           <div>
             <input type="checkbox" id="filing${idx}" value="${f.links.document_metadata}" />
             <label for="filing${idx}">
-              ${f.date} – ${f.description || "No description"} 
+              ${formatDate(f.date)} – ${formatDescription(f)} 
               <em>(Type: ${f.type || "N/A"})</em>
+              <a href="${f.links.document_metadata}" target="_blank">📄 Download</a>
             </label>
           </div>
         `).join("");
