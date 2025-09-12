@@ -41,12 +41,12 @@
     li { margin: 0.5rem 0; }
     li a { text-decoration: none; color: #004080; }
     li a:hover { text-decoration: underline; }
-    #filingHistory div { margin-bottom: 0.5rem; }
     pre {
       background: #f4f4f4;
       padding: 1rem;
       border-radius: 5px;
       overflow-x: auto;
+      white-space: pre-wrap;
     }
     .error { color: red; font-weight: bold; }
     .loading { color: #555; }
@@ -55,23 +55,18 @@
 <body>
   <h1>Financial AI Filing Analysis</h1>
 
-  <!-- Company search form -->
+  <!-- Company search -->
   <form id="lookupForm">
-    <input type="text" id="company" name="company" placeholder="Enter company name" required />
+    <input type="text" id="company" placeholder="Enter company name" required />
     <button type="submit">Search</button>
   </form>
 
-  <!-- Search results -->
   <div id="searchResults"></div>
+  <div id="result"></div>
 
-  <!-- Company info -->
-  <div id="result">Company info will appear here...</div>
+  <h3>Filing History (Accounts)</h3>
+  <div id="filingHistory"></div>
 
-  <!-- Filing history -->
-  <h3>Filing History</h3>
-  <div id="filingHistory">Select a company above to view filings...</div>
-
-  <!-- IFRS Topic selection -->
   <h3>Choose IFRS Topic</h3>
   <select id="ifrsTopic" style="width:100%;">
     <option value="">-- Select a topic --</option>
@@ -83,17 +78,17 @@
     <option value="Equity">Equity</option>
   </select>
 
-  <!-- Custom question box -->
   <h3>Your Question</h3>
   <textarea id="userQuestion" rows="4" style="width:100%;"
-    placeholder="Type the specific question you want AI to answer about this topic..."></textarea>
+    placeholder="Type your accounting question..."></textarea>
 
-  <!-- Analyze button (bottom of page) -->
   <div style="margin-top: 1rem;">
     <button id="analyzeSelected">Analyze Selected</button>
   </div>
 
-  <!-- AI analysis -->
+  <h3>Extracted Filing Text (Debug)</h3>
+  <div id="debugOutput"><em>Will appear after analysis...</em></div>
+
   <h3>AI Accounting Analysis</h3>
   <div id="aiOutput">Analysis will appear here...</div>
 
@@ -101,14 +96,12 @@
     // --- Search companies by name ---
     document.getElementById("lookupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-
       const query = document.getElementById("company").value.trim();
       const resultsDiv = document.getElementById("searchResults");
       const resultDiv = document.getElementById("result");
       const historyDiv = document.getElementById("filingHistory");
-      const aiOutputDiv = document.getElementById("aiOutput");
 
-      aiOutputDiv.innerHTML = "";
+      resultsDiv.innerHTML = "";
       resultDiv.innerHTML = "";
       historyDiv.innerHTML = "";
 
@@ -118,17 +111,15 @@
       }
 
       resultsDiv.innerHTML = "<p class='loading'>⏳ Searching companies...</p>";
-
       try {
         const res = await fetch(`/.netlify/functions/searchCompanies?q=${encodeURIComponent(query)}`);
         const data = await res.json();
 
-        if (!res.ok || !data.items || data.items.length === 0) {
+        if (!res.ok || !data.items?.length) {
           resultsDiv.innerHTML = "<p class='error'>❌ No companies found</p>";
           return;
         }
 
-        // Show a list of matching companies
         let listHTML = "<h3>Select a company:</h3><ul>";
         data.items.forEach(item => {
           listHTML += `<li><a href="#" onclick="selectCompany('${item.company_number}')">
@@ -139,26 +130,22 @@
         resultsDiv.innerHTML = listHTML;
 
       } catch (err) {
-        resultsDiv.innerHTML = `<p class='error'>⚠️ Error searching: ${err.message}</p>`;
+        resultsDiv.innerHTML = `<p class='error'>⚠️ Error: ${err.message}</p>`;
       }
     });
 
-    // --- When user selects a company ---
+    // --- Company details ---
     async function selectCompany(companyNumber) {
       const resultDiv = document.getElementById("result");
       const historyDiv = document.getElementById("filingHistory");
-      const aiOutputDiv = document.getElementById("aiOutput");
-
-      aiOutputDiv.innerHTML = "";
       resultDiv.innerHTML = "<p class='loading'>⏳ Fetching company info...</p>";
-      historyDiv.innerHTML = "";
 
       try {
-        const response = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
-        const data = await response.json();
+        const res = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
+        const data = await res.json();
 
-        if (!response.ok) {
-          resultDiv.innerHTML = `<p class='error'>❌ Error: ${data.error || "Unknown error"}</p>`;
+        if (!res.ok) {
+          resultDiv.innerHTML = `<p class='error'>❌ ${data.error || "Error fetching company info"}</p>`;
           return;
         }
 
@@ -166,130 +153,89 @@
           <div class="card">
             <h2>${data.company_name} (${data.company_number})</h2>
             <p><strong>Status:</strong> ${data.company_status}</p>
-            <p><strong>Type:</strong> ${data.type}</p>
             <p><strong>Date of Creation:</strong> ${data.date_of_creation}</p>
-            <h3>Registered Office</h3>
-            <p>${data.registered_office_address?.address_line_1 || ""}, 
-               ${data.registered_office_address?.locality || ""}, 
-               ${data.registered_office_address?.postal_code || ""}</p>
-            <h3>Official Companies House Page</h3>
-            <p><a href="https://find-and-update.company-information.service.gov.uk/company/${data.company_number}" target="_blank">
-              View on Companies House
-            </a></p>
+            <p><a href="https://find-and-update.company-information.service.gov.uk/company/${data.company_number}" target="_blank">View on Companies House</a></p>
           </div>
         `;
-
         fetchFilingHistory(companyNumber);
-
       } catch (err) {
-        resultDiv.innerHTML = `<p class='error'>⚠️ Unexpected error: ${err.message}</p>`;
+        resultDiv.innerHTML = `<p class='error'>⚠️ ${err.message}</p>`;
       }
     }
 
     // --- Filing history ---
     async function fetchFilingHistory(companyNumber) {
       const historyDiv = document.getElementById("filingHistory");
-      historyDiv.innerHTML = "<p class='loading'>⏳ Fetching filing history...</p>";
+      historyDiv.innerHTML = "<p class='loading'>⏳ Fetching filings...</p>";
 
       try {
-        const response = await fetch(`/.netlify/functions/filingHistory?company=${companyNumber}`);
-        const data = await response.json();
+        const res = await fetch(`/.netlify/functions/filingHistory?company=${companyNumber}`);
+        const data = await res.json();
 
-        if (!response.ok) {
-          historyDiv.innerHTML = `<p class='error'>❌ Error fetching filings: ${data.error || "Unknown error"}</p>`;
+        if (!res.ok) {
+          historyDiv.innerHTML = `<p class='error'>❌ ${data.error || "Error fetching filings"}</p>`;
           return;
         }
 
-        const filings = data.items.filter(f => {
-          return (f.type && f.type.toLowerCase().includes("accounts")) ||
-                 (f.description && f.description.toLowerCase().includes("accounts"));
-        });
+        const filings = data.items.filter(f =>
+          f.description?.toLowerCase().includes("accounts")
+        );
 
-        if (filings.length === 0) {
-          historyDiv.innerHTML = "<p>No accounts filings found.</p>";
+        if (!filings.length) {
+          historyDiv.innerHTML = "<p>No account filings found.</p>";
           return;
         }
 
-        // Helpers
-        function formatDate(dateStr) {
-          if (!dateStr) return "";
-          return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-        }
-
-        function formatDescription(f) {
-          const values = f.description_values || {};
-          const madeUpDate = values.made_up_date ? formatDate(values.made_up_date) : "";
-          const type = values.type ? values.type.charAt(0).toUpperCase() + values.type.slice(1) : "";
-          if (type && madeUpDate) {
-            return `${type} accounts made up to ${madeUpDate}`;
-          }
-          return f.description || "Unknown filing";
-        }
-
-        // Show checkboxes with formatted date, description, type code, and download link
-        let listHTML = filings.slice(0, 10).map((f, idx) => `
+        historyDiv.innerHTML = filings.slice(0, 10).map((f, i) => `
           <div>
-            <input type="checkbox" id="filing${idx}" value="${f.links.document_metadata}" />
-            <label for="filing${idx}">
-              ${formatDate(f.date)} – ${formatDescription(f)} 
-              <em>(Type: ${f.type || "N/A"})</em>
-              <a href="${f.links.document_metadata}" target="_blank">📄 Download</a>
+            <input type="checkbox" id="filing${i}" value="${f.links.document_metadata}" />
+            <label for="filing${i}">
+              ${new Date(f.date).toLocaleDateString("en-GB")} – ${f.description}
             </label>
           </div>
         `).join("");
-
-        historyDiv.innerHTML = listHTML;
-
       } catch (err) {
-        historyDiv.innerHTML = `<p class='error'>⚠️ Unexpected error: ${err.message}</p>`;
+        historyDiv.innerHTML = `<p class='error'>⚠️ ${err.message}</p>`;
       }
     }
 
-    // --- Analyze button (fixed at bottom) ---
+    // --- Analyze filings ---
     document.getElementById("analyzeSelected").addEventListener("click", async () => {
       const historyDiv = document.getElementById("filingHistory");
-      const selected = Array.from(historyDiv.querySelectorAll("input[type=checkbox]:checked"));
-      if (selected.length === 0) {
-        alert("Select at least one filing to analyze");
+      const selected = Array.from(historyDiv.querySelectorAll("input:checked"));
+      if (!selected.length) {
+        alert("Please select at least one filing");
         return;
       }
-      await processSelectedFilings(selected);
-    });
 
-    // --- Send filings, topic, and question to backend ---
-    async function processSelectedFilings(selectedFilings) {
-      const aiOutputDiv = document.getElementById("aiOutput");
-      aiOutputDiv.innerHTML = "<p class='loading'>⏳ Analyzing selected filings with AI...</p>";
+      const params = new URLSearchParams();
+      selected.forEach((f, i) => params.append(`file${i}`, f.value));
+      params.append("topic", document.getElementById("ifrsTopic").value || "General Accounting");
+      params.append("question", document.getElementById("userQuestion").value || "");
+
+      document.getElementById("debugOutput").innerHTML = "<p class='loading'>⏳ Extracting filings...</p>";
+      document.getElementById("aiOutput").innerHTML = "<p class='loading'>⏳ Analyzing with AI...</p>";
 
       try {
-        const formData = new FormData();
-        selectedFilings.forEach((f, idx) => {
-          formData.append(`file${idx}`, f.value);
-        });
-
-        const topic = document.getElementById("ifrsTopic").value;
-        formData.append("topic", topic || "General Accounting Analysis");
-
-        const userQuestion = document.getElementById("userQuestion").value.trim();
-        if (userQuestion) {
-          formData.append("question", userQuestion);
-        }
-
-        const aiRes = await fetch("/.netlify/functions/processUpload", {
+        const res = await fetch("/.netlify/functions/processUpload", {
           method: "POST",
-          body: formData
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: params.toString()
         });
 
-        const aiData = await aiRes.json();
-        aiOutputDiv.innerHTML = `<pre>${aiData.output || "No analysis returned."}</pre>`;
-
+        const data = await res.json();
+        document.getElementById("debugOutput").innerHTML = `<pre>${data.extracted || "No text extracted"}</pre>`;
+        document.getElementById("aiOutput").innerHTML = `<pre>${data.output || "No AI response"}</pre>`;
       } catch (err) {
-        aiOutputDiv.innerHTML = `<p class='error'>⚠️ Error analyzing filings: ${err.message}</p>`;
+        document.getElementById("debugOutput").innerHTML = `<p class='error'>⚠️ ${err.message}</p>`;
+        document.getElementById("aiOutput").innerHTML = `<p class='error'>⚠️ ${err.message}</p>`;
       }
-    }
+    });
   </script>
 </body>
 </html>
+
+
 
 
 
