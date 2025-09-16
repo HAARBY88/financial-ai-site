@@ -187,12 +187,21 @@
         }
 
         historyDiv.innerHTML = filings.slice(0, 10).map((f, i) => {
-          const desc = f.description || "Accounts filing";
-          const date = f.date ? new Date(f.date).toLocaleDateString("en-GB") : "Unknown date";
+          // Build friendly description
+          let desc = "Accounts filing";
+          if (f.description_values) {
+            const { account_type, made_up_date } = f.description_values;
+            if (account_type && made_up_date) {
+              const formattedDate = new Date(made_up_date).toLocaleDateString("en-GB", {
+                day: "numeric", month: "long", year: "numeric"
+              });
+              desc = `${account_type.charAt(0).toUpperCase() + account_type.slice(1)} accounts made up to ${formattedDate}`;
+            }
+          }
           return `
             <div>
               <input type="checkbox" id="filing${i}" value="${f.links?.document_metadata || ""}" />
-              <label for="filing${i}">${desc} (made up to ${date})</label>
+              <label for="filing${i}">${desc}</label>
             </div>
           `;
         }).join("");
@@ -236,10 +245,6 @@
   </script>
 </body>
 </html>
-
-
-
-
 
 
 
