@@ -1,0 +1,61 @@
+{
+  "Revenue": {
+    "ifrs_reference": "IFRS 15",
+    "description": "Revenue from contracts with customers – principles for recognition, measurement, and disclosure.",
+    "key_points": [
+      "Identify the contract with a customer",
+      "Identify performance obligations",
+      "Determine transaction price",
+      "Allocate transaction price to obligations",
+      "Recognize revenue when obligations are satisfied"
+    ]
+  },
+  "Leases": {
+    "ifrs_reference": "IFRS 16",
+    "description": "Accounting for leases by lessees and lessors, introducing the right-of-use model.",
+    "key_points": [
+      "Recognize right-of-use asset and lease liability",
+      "Measure lease liability at present value of payments",
+      "Depreciate right-of-use asset",
+      "Interest expense on lease liability",
+      "Short-term/low-value exemptions"
+    ]
+  },
+  "Financial Instruments": {
+    "ifrs_reference": "IFRS 9",
+    "description": "Classification, measurement, impairment, and hedge accounting for financial instruments.",
+    "key_points": [
+      "Classification: amortised cost, FVOCI, FVTPL",
+      "Impairment: expected credit loss model",
+      "Hedge accounting rules",
+      "Recognition and derecognition principles"
+    ]
+  },
+  "Assets": {
+    "ifrs_reference": "IAS 16, IAS 38, IAS 36",
+    "description": "Guidance on tangible and intangible assets, and impairment testing.",
+    "key_points": [
+      "Property, plant and equipment recognition and depreciation",
+      "Intangible assets recognition (internally generated vs acquired)",
+      "Impairment testing – recoverable amount vs carrying amount"
+    ]
+  },
+  "Liabilities": {
+    "ifrs_reference": "IAS 37, IAS 32",
+    "description": "Accounting for provisions, contingent liabilities, and financial liabilities.",
+    "key_points": [
+      "Recognize provisions when obligation is probable and measurable",
+      "Disclose contingent liabilities",
+      "Distinguish between liability and equity"
+    ]
+  },
+  "Equity": {
+    "ifrs_reference": "IAS 1, IAS 32",
+    "description": "Presentation and disclosure of equity, share capital, reserves, and distributions.",
+    "key_points": [
+      "Classification of instruments between equity and liability",
+      "Share capital and premium disclosures",
+      "Dividends and retained earnings"
+    ]
+  }
+}
