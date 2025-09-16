@@ -40,23 +40,30 @@ export async function handler(event) {
 
     const data = await response.json();
 
-    // Filter: only filings that mention "accounts" AND have document_metadata
-    const filings = data.items.filter(
-      (f) =>
+    // 🔎 Debug: log all filings returned
+    console.log("📄 Raw filings from Companies House:", JSON.stringify(data.items, null, 2));
+
+    // Filter: only filings that mention "accounts" AND have a valid document_metadata link
+    const filings = (data.items || []).filter((f) => {
+      return (
         f.description &&
         f.description.toLowerCase().includes("accounts") &&
         f.links &&
         f.links.document_metadata
-    );
+      );
+    });
 
-    // Map to a clean structure
+    // Map to safe structure (defaults if fields missing)
     const cleaned = filings.map((f) => ({
-      date: f.date || null,
+      date: f.date || "Unknown date",
       description: f.description || "No description",
       type: f.type || "N/A",
       category: f.category || "N/A",
-      document_metadata: f.links.document_metadata
+      document_metadata: f.links?.document_metadata || null
     }));
+
+    // 🔎 Debug: show cleaned results before returning
+    console.log("✅ Cleaned filings returned to frontend:", JSON.stringify(cleaned, null, 2));
 
     return {
       statusCode: 200,
@@ -70,6 +77,7 @@ export async function handler(event) {
     };
   }
 }
+
 
 
 
