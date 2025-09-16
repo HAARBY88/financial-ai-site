@@ -187,7 +187,6 @@
         }
 
         historyDiv.innerHTML = filings.slice(0, 10).map((f, i) => {
-          // Build friendly description
           let desc = "Accounts filing";
           if (f.description_values) {
             const { account_type, made_up_date } = f.description_values;
@@ -198,10 +197,12 @@
               desc = `${account_type.charAt(0).toUpperCase() + account_type.slice(1)} accounts made up to ${formattedDate}`;
             }
           }
+          // Always include the filing date from API
+          const filingDate = f.date ? new Date(f.date).toLocaleDateString("en-GB") : "Unknown date";
           return `
             <div>
               <input type="checkbox" id="filing${i}" value="${f.links?.document_metadata || ""}" />
-              <label for="filing${i}">${desc}</label>
+              <label for="filing${i}">${filingDate} – ${desc}</label>
             </div>
           `;
         }).join("");
@@ -245,6 +246,7 @@
   </script>
 </body>
 </html>
+
 
 
 
