@@ -68,10 +68,19 @@
   <div id="filingHistory"></div>
 
   <h3>Choose IFRS Topic</h3>
-  <select id="ifrsTopic" style="width:100%;"></select>
+  <select id="ifrsTopic" style="width:100%;">
+    <option value="">-- Select a topic --</option>
+    <option value="Revenue">Revenue</option>
+    <option value="Leases">Leases</option>
+    <option value="Financial Instruments">Financial Instruments</option>
+    <option value="Assets">Assets</option>
+    <option value="Liabilities">Liabilities</option>
+    <option value="Equity">Equity</option>
+  </select>
 
   <h3>Your Question</h3>
-  <textarea id="userQuestion" rows="4" style="width:100%;" placeholder="Type your accounting question..."></textarea>
+  <textarea id="userQuestion" rows="4" style="width:100%;"
+    placeholder="Type your accounting question..."></textarea>
 
   <div style="margin-top: 1rem;">
     <button id="analyzeSelected">Analyze Selected</button>
@@ -84,22 +93,6 @@
   <div id="aiOutput">Analysis will appear here...</div>
 
   <script>
-    // --- Load IFRS topics from taxonomy.json ---
-    async function loadIFRSTopics() {
-      try {
-        const res = await fetch("/ifrs-taxonomy/taxonomy.json");
-        const taxonomy = await res.json();
-        const select = document.getElementById("ifrsTopic");
-        select.innerHTML = `<option value="">-- Select a topic --</option>`;
-        Object.keys(taxonomy).forEach(topic => {
-          select.innerHTML += `<option value="${topic}">${topic} (${taxonomy[topic].ifrs_reference})</option>`;
-        });
-      } catch (err) {
-        console.error("Error loading IFRS taxonomy:", err);
-      }
-    }
-    loadIFRSTopics();
-
     // --- Search companies by name ---
     document.getElementById("lookupForm").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -184,13 +177,24 @@
           return;
         }
 
-        const filings = data.items.filter(f => f.description?.toLowerCase().includes("accounts"));
+        const filings = data.items.filter(f =>
+          f.description?.toLowerCase().includes("accounts")
+        );
+
         if (!filings.length) {
           historyDiv.innerHTML = "<p>No account filings found.</p>";
           return;
         }
 
-        historyDiv.innerHTML = filings.slice(0, 10).map((f, i) => `
+        // Only include filings with document_metadata
+        const validFilings = filings.filter(f => f.links && f.links.document_metadata);
+
+        if (!validFilings.length) {
+          historyDiv.innerHTML = "<p>⚠️ No downloadable account filings found.</p>";
+          return;
+        }
+
+        historyDiv.innerHTML = validFilings.slice(0, 10).map((f, i) => `
           <div>
             <input type="checkbox" id="filing${i}" value="${f.links.document_metadata}" />
             <label for="filing${i}">
@@ -238,6 +242,8 @@
   </script>
 </body>
 </html>
+
+
 
 
 
