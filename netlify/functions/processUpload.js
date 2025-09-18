@@ -1,14 +1,10 @@
-import OpenAI from "openai";
-import querystring from "querystring";
-import fetch from "node-fetch";
+import multiparty from "multiparty";
 import fs from "fs";
+import pdfParse from "pdf-parse";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// Load taxonomy at startup
-const taxonomy = JSON.parse(
-  fs.readFileSync("./ifrs-taxonomy/taxonomy.json", "utf8")
-);
+// Tell Netlify not to parse automatically
+export const config = { api: { bodyParser: false } };
 
 export async function handler(event) {
   if (event.httpMethod !== "POST") {
@@ -16,55 +12,60 @@ export async function handler(event) {
   }
 
   try {
-    const params = querystring.parse(event.body);
-
-    const selectedFiles = Object.keys(params)
-      .filter(k => k.startsWith("file"))
-      .map(k => params[k]);
-
-    const topic = params.topic || "General Accounting";
-    const question = params.question || "";
-
-    // Fetch filings text
-    let extractedText = "";
-    for (const fileUrl of selectedFiles) {
-      try {
-        const res = await fetch(fileUrl, {
-          headers: {
-            Authorization: `Basic ${Buffer.from(process.env.COMPANIES_HOUSE_KEY + ":").toString("base64")}`
-          }
-        });
-        extractedText += "\n\n" + (await res.text());
-      } catch (err) {
-        extractedText += `\n\n⚠️ Error fetching file: ${err.message}`;
-      }
-    }
-
-    // Add taxonomy info
-    const topicInfo = taxonomy[topic] || {};
-    const topicContext = `${topic} (${topicInfo.ifrs_reference || "IFRS"}): ${topicInfo.description || ""}\nKey points: ${topicInfo.key_points?.join(", ") || ""}`;
-
-    // Call OpenAI
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: `You are an IFRS accounting expert.` },
-        { role: "user", content: `Topic: ${topicContext}\n\nUser Question: ${question}\n\nFinancial data extracted:\n${extractedText}` }
-      ]
+    // --- Parse uploaded form data
+    const form = new multiparty.Form();
+    const formData = await new Promise((resolve, reject) => {
+      form.parse(event, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve({ fields, files });
+      });
     });
+
+    // --- Get PDF file
+    const filePath = formData.files.statement[0].path;
+    const fileData = fs.readFileSync(filePath);
+    const pdfText = await pdfParse(fileData);
+    const extractedText = pdfText.text;
+
+    // --- Get fields from the form
+    const framework = formData.fields.framework ? formData.fields.framework[0] : "IFRS";
+    const topic = formData.fields.topic ? formData.fields.topic[0] : "General accounting";
+
+    // --- Init Gemini
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    // --- Build prompt
+    const prompt = `
+      You are an expert in ${framework} accounting.
+      Analyse the following financial data and explain ${topic}:
+
+      ${extractedText}
+    `;
+
+    // --- Ask Gemini
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        extracted: extractedText.slice(0, 3000), // prevent payload bloat
-        output: response.choices[0].message.content
+        extracted: extractedText.slice(0, 2000), // first 2k chars for debug
+        output: text
       })
     };
+
   } catch (err) {
-    console.error("Processing error:", err);
-    return { statusCode: 500, body: JSON.stringify({ error: "Processing failed." }) };
+    console.error("Upload error:", err);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Processing failed.", details: err.message })
+    };
   }
 }
+
+
 
 
 
