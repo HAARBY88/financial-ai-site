@@ -182,57 +182,27 @@
         );
 
         if (!filings.length) {
-          historyDiv.innerHTML = "<p>No account filings found.</p>";
+          historyDiv.innerHTML = "<p>⚠️ No downloadable account filings found.</p>";
           return;
         }
 
-        historyDiv.innerHTML = filings.slice(0, 10).map((f, i) => `
-          <div>
-            <input type="checkbox" id="filing${i}" value="${f.links.document_metadata}" />
-            <label for="filing${i}">
-              ${new Date(f.date).toLocaleDateString("en-GB")} – ${f.description}
-            </label>
-          </div>
-        `).join("");
+        historyDiv.innerHTML = filings.slice(0, 10).map((f, i) => {
+          const docLink = f.links?.document_metadata || null;
+          const label = `${new Date(f.date).toLocaleDateString("en-GB")} – ${f.description}`;
+
+          return `
+            <div>
+              <input type="checkbox" id="filing${i}" value="${docLink || ""}" ${!docLink ? "disabled" : ""}/>
+              <label for="filing${i}">
+                ${label} ${!docLink ? "(Not downloadable)" : ""}
+              </label>
+            </div>
+          `;
+        }).join("");
       } catch (err) {
         historyDiv.innerHTML = `<p class='error'>⚠️ ${err.message}</p>`;
       }
     }
-
-    // --- Analyze filings ---
-    document.getElementById("analyzeSelected").addEventListener("click", async () => {
-      const historyDiv = document.getElementById("filingHistory");
-      const selected = Array.from(historyDiv.querySelectorAll("input:checked"));
-      if (!selected.length) {
-        alert("Please select at least one filing");
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("framework", "IFRS");
-      formData.append("topic", document.getElementById("ifrsTopic").value || "General Accounting");
-
-      // 📝 This assumes you already have PDF download handling in your Netlify function.
-      // For now, just send the first selected filing.
-      formData.append("statement", selected[0].value);
-
-      document.getElementById("debugOutput").innerHTML = "<p class='loading'>⏳ Extracting filings...</p>";
-      document.getElementById("aiOutput").innerHTML = "<p class='loading'>⏳ Analyzing with Gemini...</p>";
-
-      try {
-        const res = await fetch("/.netlify/functions/processUpload", {
-          method: "POST",
-          body: formData
-        });
-
-        const data = await res.json();
-        document.getElementById("debugOutput").innerHTML = `<pre>${data.extracted || "No text extracted"}</pre>`;
-        document.getElementById("aiOutput").innerHTML = `<pre>${data.output || "No AI response"}</pre>`;
-      } catch (err) {
-        document.getElementById("debugOutput").innerHTML = `<p class='error'>⚠️ ${err.message}</p>`;
-        document.getElementById("aiOutput").innerHTML = `<p class='error'>⚠️ ${err.message}</p>`;
-      }
-    });
   </script>
 </body>
 </html>
