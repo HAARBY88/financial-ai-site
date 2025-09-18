@@ -1,16 +1,14 @@
 [build]
-  functions = "netlify/functions"
-  publish = "."
   command = "npm install"
+  publish = "."
 
 [functions]
-  # Use Node 18 runtime (recommended for OpenAI SDK)
   node_bundler = "esbuild"
-  external_node_modules = ["openai", "multiparty", "pdf-parse", "node-fetch"]
 
-[dev]
-  functions = "netlify/functions"
-  publish = "."
-
-[build.environment]
-  NODE_VERSION = "18"
+  [functions."*"]
+    external_node_modules = [
+      "multiparty",
+      "pdf-parse",
+      "node-fetch",
+      "@google/generative-ai"
+    ]
