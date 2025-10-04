@@ -2,215 +2,139 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Financial AI Filing Analysis</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Draft Financial Statements (MVP)</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 900px;
-      margin: auto;
-      padding: 2rem;
-      background: #f4f6f8;
-      color: #333;
-    }
-    h1, h2, h3 { color: #004080; }
-    form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-    input, select, textarea {
-      flex: 1;
-      padding: 0.5rem;
-      font-size: 1rem;
-      margin-top: 0.5rem;
-    }
-    button {
-      padding: 0.5rem 1rem;
-      font-size: 1rem;
-      background: #004080;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    button:hover { background: #0066cc; }
-    .card {
-      background: white;
-      padding: 1rem 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      margin-top: 1rem;
-    }
-    ul { list-style: none; padding: 0; }
-    li { margin: 0.5rem 0; }
-    li a { text-decoration: none; color: #004080; }
-    li a:hover { text-decoration: underline; }
-    pre {
-      background: #f4f4f4;
-      padding: 1rem;
-      border-radius: 5px;
-      overflow-x: auto;
-      white-space: pre-wrap;
-    }
-    .error { color: red; font-weight: bold; }
-    .loading { color: #555; }
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: auto; padding: 2rem; background:#f7f9fc; color:#222; }
+    h1, h2 { color:#083a7a; }
+    .card { background:#fff; padding:1rem 1.25rem; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.08); margin:1rem 0; }
+    label { display:block; margin:0.5rem 0 0.25rem; font-weight:600; }
+    input, select, button, textarea { width:100%; padding:0.6rem; font-size:1rem; }
+    button { background:#0b66c3; color:#fff; border:0; border-radius:6px; cursor:pointer; margin-top:0.75rem; }
+    button:hover { background:#0a58a6; }
+    .row { display:grid; gap:0.75rem; grid-template-columns:1fr 1fr; }
+    .mono { white-space:pre-wrap; background:#f2f4f7; padding:0.75rem; border-radius:6px; overflow:auto; max-height:260px; }
+    small { color:#555; }
   </style>
 </head>
 <body>
-  <h1>Financial AI Filing Analysis</h1>
+  <h1>Draft Financial Statements</h1>
+  <p>Steps: 1) Upload prior PDF → 2) Pick standard → 3) Upload trial balances → 4) Generate draft.</p>
 
-  <!-- Company search -->
-  <form id="lookupForm">
-    <input type="text" id="company" placeholder="Enter company name" required />
-    <button type="submit">Search</button>
-  </form>
-
-  <div id="searchResults"></div>
-  <div id="result"></div>
-
-  <h3>Filing History (Accounts)</h3>
-  <div id="filingHistory"></div>
-
-  <h3>Choose IFRS Topic</h3>
-  <select id="ifrsTopic" style="width:100%;">
-    <option value="">-- Select a topic --</option>
-    <option value="Revenue">Revenue</option>
-    <option value="Leases">Leases</option>
-    <option value="Financial Instruments">Financial Instruments</option>
-    <option value="Assets">Assets</option>
-    <option value="Liabilities">Liabilities</option>
-    <option value="Equity">Equity</option>
-  </select>
-
-  <h3>Your Question</h3>
-  <textarea id="userQuestion" rows="4" style="width:100%;"
-    placeholder="Type your accounting question..."></textarea>
-
-  <div style="margin-top: 1rem;">
-    <button id="analyzeSelected">Analyze Selected</button>
+  <div class="card">
+    <h2>1) Upload Prior-Year Financial Statements (PDF)</h2>
+    <form id="priorPdfForm">
+      <label>Prior-year PDF</label>
+      <input type="file" name="priorPdf" accept=".pdf" required />
+      <button type="submit">Extract Prior-Year Style</button>
+    </form>
+    <div id="priorPreview" class="mono"><small>Preview will appear here…</small></div>
   </div>
 
-  <h3>Extracted Filing Text (Debug)</h3>
-  <div id="debugOutput"><em>Will appear after analysis...</em></div>
+  <div class="card">
+    <h2>2) Choose Accounting Standard</h2>
+    <label>Framework</label>
+    <select id="framework">
+      <option value="IFRS">IFRS</option>
+      <option value="US GAAP">US GAAP</option>
+    </select>
+  </div>
 
-  <h3>AI Accounting Analysis</h3>
-  <div id="aiOutput">Analysis will appear here...</div>
+  <div class="card">
+    <h2>3) Upload Trial Balances (Excel)</h2>
+    <div class="row">
+      <div>
+        <label>Prior year TB (Excel)</label>
+        <input type="file" id="tbPrior" accept=".xlsx,.xls" required />
+      </div>
+      <div>
+        <label>Current year TB (Excel)</label>
+        <input type="file" id="tbCurrent" accept=".xlsx,.xls" required />
+      </div>
+    </div>
+    <button id="parseTbBtn">Read Trial Balances</button>
+    <div id="tbPreview" class="mono"><small>TB check will appear here…</small></div>
+  </div>
+
+  <div class="card">
+    <h2>4) Generate Draft Statements</h2>
+    <label>Company name (optional)</label>
+    <input type="text" id="companyName" placeholder="e.g. Anglo London Limited"/>
+    <label>Notes / special instructions (optional)</label>
+    <textarea id="notes" rows="4" placeholder="e.g. Show revenue breakdown; highlight lease liabilities;"></textarea>
+    <button id="generateBtn">Generate Draft with Gemini</button>
+    <div id="aiOutput" class="mono"><small>Draft will appear here…</small></div>
+  </div>
 
   <script>
-    // --- Search companies by name ---
-    document.getElementById("lookupForm").addEventListener("submit", async (e) => {
+    // 1) Upload Prior PDF → extract style/text sample
+    document.getElementById("priorPdfForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const query = document.getElementById("company").value.trim();
-      const resultsDiv = document.getElementById("searchResults");
-      const resultDiv = document.getElementById("result");
-      const historyDiv = document.getElementById("filingHistory");
+      const formData = new FormData(e.target);
+      document.getElementById("priorPreview").textContent = "Extracting text from prior-year PDF…";
+      const res = await fetch("/.netlify/functions/extractPriorPdf", { method:"POST", body: formData });
+      const data = await res.json();
+      document.getElementById("priorPreview").textContent = data.preview || data.error || "No text found.";
+      sessionStorage.setItem("priorText", data.fullText || "");
+    });
 
-      resultsDiv.innerHTML = "";
-      resultDiv.innerHTML = "";
-      historyDiv.innerHTML = "";
+    // 3) Read Trial Balances (client uploads → server parses)
+    document.getElementById("parseTbBtn").addEventListener("click", async () => {
+      const prior = document.getElementById("tbPrior").files[0];
+      const current = document.getElementById("tbCurrent").files[0];
+      if (!prior || !current) {
+        alert("Please choose both prior and current year TB files.");
+        return;
+      }
+      const fd = new FormData();
+      fd.append("tbPrior", prior);
+      fd.append("tbCurrent", current);
+      document.getElementById("tbPreview").textContent = "Reading trial balances…";
+      const res = await fetch("/.netlify/functions/parseTrialBalances", { method:"POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById("tbPreview").textContent = data.error || "Error reading TB files.";
+        return;
+      }
+      document.getElementById("tbPreview").textContent = data.summary || "Parsed.";
+      // keep parsed rows in sessionStorage for generation
+      sessionStorage.setItem("tbParsed", JSON.stringify(data.tbParsed || {}));
+    });
 
-      if (!query) {
-        resultsDiv.innerHTML = "<p class='error'>⚠️ Please enter a company name.</p>";
+    // 4) Generate draft statements with Gemini
+    document.getElementById("generateBtn").addEventListener("click", async () => {
+      const framework = document.getElementById("framework").value || "IFRS";
+      const companyName = document.getElementById("companyName").value || "";
+      const notes = document.getElementById("notes").value || "";
+      const priorText = sessionStorage.getItem("priorText") || "";
+      const tbParsed = sessionStorage.getItem("tbParsed") || "";
+
+      if (!priorText) {
+        alert("Please upload the prior-year PDF first.");
+        return;
+      }
+      if (!tbParsed) {
+        alert("Please upload and parse the trial balances first.");
         return;
       }
 
-      resultsDiv.innerHTML = "<p class='loading'>⏳ Searching companies...</p>";
-      try {
-        const res = await fetch(`/.netlify/functions/searchCompanies?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
+      document.getElementById("aiOutput").textContent = "Generating draft with Gemini…";
 
-        if (!res.ok || !data.items?.length) {
-          resultsDiv.innerHTML = "<p class='error'>❌ No companies found</p>";
-          return;
-        }
-
-        let listHTML = "<h3>Select a company:</h3><ul>";
-        data.items.forEach(item => {
-          listHTML += `<li><a href="#" onclick="selectCompany('${item.company_number}')">
-            ${item.title} (${item.company_number})
-          </a></li>`;
-        });
-        listHTML += "</ul>";
-        resultsDiv.innerHTML = listHTML;
-
-      } catch (err) {
-        resultsDiv.innerHTML = `<p class='error'>⚠️ Error: ${err.message}</p>`;
-      }
+      const res = await fetch("/.netlify/functions/generateStatements", {
+        method:"POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({
+          framework, companyName, notes,
+          priorText,
+          tbParsed: JSON.parse(tbParsed)
+        })
+      });
+      const data = await res.json();
+      document.getElementById("aiOutput").textContent = data.output || data.error || "No output.";
     });
-
-    // --- Company details ---
-    async function selectCompany(companyNumber) {
-      const resultDiv = document.getElementById("result");
-      const historyDiv = document.getElementById("filingHistory");
-      resultDiv.innerHTML = "<p class='loading'>⏳ Fetching company info...</p>";
-
-      try {
-        const res = await fetch(`/.netlify/functions/companiesHouse?company=${companyNumber}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          resultDiv.innerHTML = `<p class='error'>❌ ${data.error || "Error fetching company info"}</p>`;
-          return;
-        }
-
-        resultDiv.innerHTML = `
-          <div class="card">
-            <h2>${data.company_name} (${data.company_number})</h2>
-            <p><strong>Status:</strong> ${data.company_status}</p>
-            <p><strong>Date of Creation:</strong> ${data.date_of_creation}</p>
-            <p><a href="https://find-and-update.company-information.service.gov.uk/company/${data.company_number}" target="_blank">View on Companies House</a></p>
-          </div>
-        `;
-        fetchFilingHistory(companyNumber);
-      } catch (err) {
-        resultDiv.innerHTML = `<p class='error'>⚠️ ${err.message}</p>`;
-      }
-    }
-
-    // --- Filing history ---
-    async function fetchFilingHistory(companyNumber) {
-      const historyDiv = document.getElementById("filingHistory");
-      historyDiv.innerHTML = "<p class='loading'>⏳ Fetching filings...</p>";
-
-      try {
-        const res = await fetch(`/.netlify/functions/filingHistory?company=${companyNumber}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          historyDiv.innerHTML = `<p class='error'>❌ ${data.error || "Error fetching filings"}</p>`;
-          return;
-        }
-
-        const filings = data.items.filter(f =>
-          f.description?.toLowerCase().includes("accounts")
-        );
-
-        if (!filings.length) {
-          historyDiv.innerHTML = "<p>⚠️ No downloadable account filings found.</p>";
-          return;
-        }
-
-        historyDiv.innerHTML = filings.slice(0, 10).map((f, i) => {
-          const docLink = f.links?.document_metadata || null;
-          const label = `${new Date(f.date).toLocaleDateString("en-GB")} – ${f.description}`;
-
-          return `
-            <div>
-              <input type="checkbox" id="filing${i}" value="${docLink || ""}" ${!docLink ? "disabled" : ""}/>
-              <label for="filing${i}">
-                ${label} ${!docLink ? "(Not downloadable)" : ""}
-              </label>
-            </div>
-          `;
-        }).join("");
-      } catch (err) {
-        historyDiv.innerHTML = `<p class='error'>⚠️ ${err.message}</p>`;
-      }
-    }
   </script>
 </body>
 </html>
-
-
-
-
-
 
 
 
