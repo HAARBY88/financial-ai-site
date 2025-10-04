@@ -1,16 +1,32 @@
-// netlify/functions/generateStatements.js
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// CommonJS wrapper with dynamic ESM import for Gemini
+// DO NOT use: const { GoogleGenerativeAI } = require("@google/generative-ai");
+// The package is ESM-only. Use dynamic import instead.
 
-export async function handler(event) {
-  if (event.httpMethod !== "POST") return { statusCode:405, body:"Method Not Allowed" };
+async function getGemini() {
+  // Dynamic import to load ESM from CommonJS
+  const mod = await import("@google/generative-ai");
+  return mod;
+}
+
+exports.handler = async (event) => {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
+  }
+
   try {
     if (!process.env.GEMINI_API_KEY) {
-      return { statusCode:500, body: JSON.stringify({ error:"Missing GEMINI_API_KEY" }) };
+      return { statusCode: 500, body: JSON.stringify({ error: "Missing GEMINI_API_KEY" }) };
     }
 
-    const { framework = "IFRS", companyName = "", notes = "", priorText = "", tbParsed = {} } =
-      JSON.parse(event.body || "{}");
+    const {
+      framework = "IFRS",
+      companyName = "",
+      notes = "",
+      priorText = "",
+      tbParsed = {},
+    } = JSON.parse(event.body || "{}");
 
+    const { GoogleGenerativeAI } = await getGemini();
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
@@ -35,15 +51,15 @@ Optional instructions from the user: ${notes || "(none)"}
 
 PRIOR-YEAR STATEMENTS (style source):
 <<<
-${priorText.slice(0, 20000)}
+${(priorText || "").slice(0, 20000)}
 >>>
 
 TRIAL BALANCES (key-value maps):
 CURRENT YEAR TB:
-${JSON.stringify(tbParsed.current || {}, null, 2)}
+${JSON.stringify(tbParsed?.current || {}, null, 2)}
 
 PRIOR YEAR TB:
-${JSON.stringify(tbParsed.prior || {}, null, 2)}
+${JSON.stringify(tbParsed?.prior || {}, null, 2)}
 
 Output a clean, human-readable draft with these sections:
 1) Statement of Profit or Loss (with comparatives)
@@ -60,12 +76,17 @@ Use professional headings and consistent formatting.
     const result = await model.generateContent(prompt);
     const answer = result?.response?.text?.() || "No output.";
 
-    return { statusCode:200, body: JSON.stringify({ output: answer }) };
+    return { statusCode: 200, body: JSON.stringify({ output: answer }) };
   } catch (err) {
     console.error("generateStatements error:", err);
-    return { statusCode:500, body: JSON.stringify({ error:"Failed to generate statements", details: err.message }) };
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Failed to generate statements", details: err.message }),
+    };
   }
-}
+};
+
+
 
 
 
