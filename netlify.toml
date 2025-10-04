@@ -7,8 +7,8 @@
 
   [functions."*"]
     external_node_modules = [
+      "@google/generative-ai",
       "multiparty",
       "pdf-parse",
-      "node-fetch",
-      "@google/generative-ai"
+      "xlsx"
     ]
