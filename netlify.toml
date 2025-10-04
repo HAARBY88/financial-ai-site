@@ -8,7 +8,7 @@
   [functions."*"]
     external_node_modules = [
       "@google/generative-ai",
-      "multiparty",
+      "parse-multipart",
       "pdf-parse",
       "xlsx"
     ]
