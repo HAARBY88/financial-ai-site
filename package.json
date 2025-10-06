@@ -1,7 +1,7 @@
 {
   "name": "financial-ai-site",
   "version": "1.0.0",
-  "description": "Draft financial statements generator",
+  "type": "module",
   "dependencies": {
     "@google/generative-ai": "^0.16.0",
     "parse-multipart": "^1.0.4",
@@ -9,4 +9,6 @@
     "xlsx": "^0.18.5"
   }
 }
+
+
 
