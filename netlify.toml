@@ -4,11 +4,10 @@
 
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = [
+    "@google/generative-ai",
+    "parse-multipart",
+    "pdf-parse",
+    "xlsx"
+  ]
 
-  [functions."*"]
-    external_node_modules = [
-      "@google/generative-ai",
-      "parse-multipart",
-      "pdf-parse",
-      "xlsx"
-    ]
