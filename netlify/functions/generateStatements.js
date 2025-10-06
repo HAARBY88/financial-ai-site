@@ -1,49 +1,83 @@
+// netlify/functions/generateStatements.js
 async function getGemini() {
+  // Dynamically import inside Netlify function to avoid ESM bundling issues
   const mod = await import("@google/generative-ai");
   return mod;
 }
 
 export async function handler(event) {
   try {
-    if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
+    if (event.httpMethod !== "POST") {
+      return { statusCode: 405, body: "Method Not Allowed" };
+    }
 
-    if (!process.env.GEMINI_API_KEY)
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("Missing GEMINI_API_KEY in environment");
       return { statusCode: 500, body: JSON.stringify({ error: "Missing GEMINI_API_KEY" }) };
+    }
 
-    const body = JSON.parse(event.body || "{}");
-    const { framework = "IFRS", companyName = "", notes = "", priorText = "", tbParsed = {} } = body;
+    // Parse JSON body safely
+    let body;
+    try {
+      body = JSON.parse(event.body || "{}");
+    } catch {
+      body = {};
+    }
 
+    const {
+      framework = "IFRS",
+      companyName = "the company",
+      notes = "",
+      priorText = "",
+      tbParsed = {}
+    } = body;
+
+    if (!priorText || !Object.keys(tbParsed).length) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing required data (priorText or tbParsed)." })
+      };
+    }
+
+    // Load Gemini
     const { GoogleGenerativeAI } = await getGemini();
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     const prompt = `
 You are an expert ${framework} financial reporting assistant.
-Generate a professional draft set of financial statements for ${companyName || "the company"}.
+Generate a concise draft of the current year's financial statements for ${companyName}.
+Use the structure, tone, and note style evident in the prior year's report text.
+Incorporate trial balance movements and align presentation to ${framework}.
 
 Inputs:
-- Prior-year report text (style): ${priorText.slice(0, 12000)}
-- Current TB: ${JSON.stringify(tbParsed.current || {}, null, 2)}
-- Prior TB: ${JSON.stringify(tbParsed.prior || {}, null, 2)}
-- Notes: ${notes}
+- Prior-year report text: ${priorText.slice(0, 12000)}
+- Current trial balance: ${JSON.stringify(tbParsed.current || {}, null, 2)}
+- Prior-year trial balance: ${JSON.stringify(tbParsed.prior || {}, null, 2)}
+- Notes / additional instructions: ${notes}
 
-Include:
-1) Profit or loss with comparatives
-2) Balance sheet with comparatives
-3) Key IFRS/US GAAP compliant notes
-4) Highlight missing disclosures
-`;
+Return your response as clear formatted text sections (Profit or Loss, Balance Sheet, Notes).`;
 
+    // Generate output
     const result = await model.generateContent(prompt);
-    const text = result?.response?.text?.() || "No output generated.";
+    const text = (await result.response?.text?.()) || "No text generated.";
 
-    return { statusCode: 200, body: JSON.stringify({ output: text }) };
-  } catch (error) {
-    console.error("generateStatements error:", error);
-    return { statusCode: 500, body: JSON.stringify({ error: "Failed to generate", details: error.message }) };
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ output: text })
+    };
+
+  } catch (err) {
+    console.error("generateStatements error:", err);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: "Failed to generate",
+        details: err.message || err.toString()
+      })
+    };
   }
 }
-
 
 
 
