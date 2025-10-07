@@ -1,8 +1,7 @@
 // netlify/functions/generateStatements.js
-// CommonJS wrapper + dynamic ESM import for the Gemini SDK
+// CommonJS + dynamic ESM import for the Gemini SDK
 
 async function getGemini() {
-  // ESM import works fine inside CommonJS on Netlify
   const mod = await import("@google/generative-ai");
   return mod;
 }
@@ -26,30 +25,27 @@ module.exports.handler = async (event) => {
       return { statusCode: 500, body: JSON.stringify({ error: "Missing GEMINI_API_KEY" }) };
     }
 
-    // Allow an explicit model via env; otherwise try a list in order.
+    // Prefer your env override; otherwise use current v1 “latest” aliases
     const candidates = [
-      process.env.GEMINI_MODEL,
-      "gemini-1.5-flash-002",
-      "gemini-1.5-pro-002",
-      "gemini-1.5-flash",
-      "gemini-1.5-pro",
+      process.env.GEMINI_MODEL,              // optional override
+      "gemini-1.5-flash-latest",
+      "gemini-1.5-pro-latest"
     ].filter(Boolean);
 
     let body = {};
     try { body = JSON.parse(event.body || "{}"); } catch {}
-
     const {
       framework = "IFRS",
       companyName = "the company",
       notes = "",
       priorText = "",
-      tbParsed = {},
+      tbParsed = {}
     } = body;
 
     if (!priorText || !tbParsed || !Object.keys(tbParsed).length) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing required data (priorText and tbParsed)." }),
+        body: JSON.stringify({ error: "Missing required data (priorText and tbParsed)." })
       };
     }
 
@@ -81,7 +77,9 @@ Keep the tone concise and professional and align to ${framework}.
 `.trim();
 
     const { GoogleGenerativeAI } = await getGemini();
+    const genAI = new GoogleGenerativeAI(apiKey);
 
+    // Try candidates in order
     let lastErr = null;
     for (const modelId of candidates) {
       try {
@@ -89,39 +87,43 @@ Keep the tone concise and professional and align to ${framework}.
         return { statusCode: 200, body: JSON.stringify({ output: text, model: modelId }) };
       } catch (err) {
         const msg = (err && (err.message || String(err))) || "";
-        const is404 = /not found|404/i.test(msg);
-        const notSupported = /not supported/i.test(msg);
-        if (is404 || notSupported) {
-          // Try next candidate
-          lastErr = err;
-          continue;
-        }
-        // Other errors: report immediately
-        console.error(`Model "${modelId}" failed:`, err);
-        return {
-          statusCode: 500,
-          body: JSON.stringify({ error: "Failed to generate", modelTried: modelId, details: msg }),
-        };
+        // Log and try next
+        console.error(`Model "${modelId}" failed:`, msg);
+        lastErr = err;
+        continue;
       }
     }
 
-    console.error("All Gemini model candidates failed.", lastErr);
+    // If all failed, list models available to your key and return them to help selection
+    let modelsAvailable = [];
+    try {
+      const listed = await genAI.listModels?.();
+      // Some SDK versions return {models:[...]}, others an array
+      const arr = Array.isArray(listed) ? listed : (listed?.models || []);
+      modelsAvailable = arr.map(m => m?.name || m?.model || m).filter(Boolean);
+    } catch (e) {
+      console.error("listModels failed:", e?.message || e);
+    }
+
     return {
       statusCode: 500,
       body: JSON.stringify({
         error: "Failed to generate",
         details: (lastErr && (lastErr.message || String(lastErr))) || "All models unavailable",
         tried: candidates,
-      }),
+        modelsAvailable
+      })
     };
   } catch (err) {
     console.error("generateStatements error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Failed to generate", details: err?.message || String(err) }),
+      body: JSON.stringify({ error: "Failed to generate", details: err?.message || String(err) })
     };
   }
 };
+
+
 
 
 
