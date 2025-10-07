@@ -1,17 +1,65 @@
 // netlify/functions/generateStatements.js
-// CommonJS + dynamic ESM import for the Gemini SDK
+// CommonJS function that calls the Gemini v1 REST API directly (no SDK needed).
 
-async function getGemini() {
-  const mod = await import("@google/generative-ai");
-  return mod;
+/**
+ * POST https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key=API_KEY
+ * Body shape:
+ * {
+ *   contents: [{ role: "user", parts: [{ text: "your prompt" }] }]
+ * }
+ */
+
+const DEFAULT_MODELS = [
+  // try an explicit env override first (if set)
+  // then current v1 "latest" aliases:
+  "gemini-1.5-flash-latest",
+  "gemini-1.5-pro-latest",
+  // and a conservative older fallback that usually exists:
+  "gemini-pro"
+];
+
+async function callGeminiREST({ apiKey, model, prompt }) {
+  const endpoint = `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(
+    model
+  )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }]}]
+    })
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    const error = new Error(`Gemini HTTP ${res.status}: ${txt}`);
+    error.status = res.status;
+    throw error;
+  }
+
+  const data = await res.json();
+  // Safely extract text
+  const candidates = data.candidates || [];
+  const first = candidates[0] || {};
+  const parts = first.content?.parts || [];
+  const textPart = parts.find(p => typeof p.text === "string");
+  return textPart?.text || "No text generated.";
 }
 
-async function tryModel({ GoogleGenerativeAI }, apiKey, modelId, prompt) {
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: modelId });
-  const res = await model.generateContent(prompt);
-  const out = await res.response?.text?.();
-  return out || "No output generated.";
+async function listModelsREST(apiKey) {
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    // Some responses are { models: [...] }, some may be arrays—handle both:
+    const arr = Array.isArray(data) ? data : (data.models || []);
+    return arr.map(m => m?.name || m?.model).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 module.exports.handler = async (event) => {
@@ -25,13 +73,13 @@ module.exports.handler = async (event) => {
       return { statusCode: 500, body: JSON.stringify({ error: "Missing GEMINI_API_KEY" }) };
     }
 
-    // Prefer your env override; otherwise use current v1 “latest” aliases
+    // Read preferred model from env, otherwise use defaults
     const candidates = [
-      process.env.GEMINI_MODEL,              // optional override
-      "gemini-1.5-flash-latest",
-      "gemini-1.5-pro-latest"
+      process.env.GEMINI_MODEL,
+      ...DEFAULT_MODELS
     ].filter(Boolean);
 
+    // Parse input
     let body = {};
     try { body = JSON.parse(event.body || "{}"); } catch {}
     const {
@@ -76,52 +124,48 @@ Output sections:
 Keep the tone concise and professional and align to ${framework}.
 `.trim();
 
-    const { GoogleGenerativeAI } = await getGemini();
-    const genAI = new GoogleGenerativeAI(apiKey);
-
-    // Try candidates in order
     let lastErr = null;
-    for (const modelId of candidates) {
+    for (const model of candidates) {
       try {
-        const text = await tryModel({ GoogleGenerativeAI }, apiKey, modelId, prompt);
-        return { statusCode: 200, body: JSON.stringify({ output: text, model: modelId }) };
+        const output = await callGeminiREST({ apiKey, model, prompt });
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ output, model })
+        };
       } catch (err) {
-        const msg = (err && (err.message || String(err))) || "";
-        // Log and try next
-        console.error(`Model "${modelId}" failed:`, msg);
+        // If 404, try the next model; otherwise bubble up immediately
+        const msg = err && (err.message || String(err));
+        const is404 = /404/.test(String(err.status)) || /not found/i.test(msg);
+        if (!is404) {
+          console.error(`Model "${model}" error:`, msg);
+          return { statusCode: 500, body: JSON.stringify({ error: "Failed to generate", modelTried: model, details: msg }) };
+        }
+        // try next
         lastErr = err;
-        continue;
       }
     }
 
-    // If all failed, list models available to your key and return them to help selection
-    let modelsAvailable = [];
-    try {
-      const listed = await genAI.listModels?.();
-      // Some SDK versions return {models:[...]}, others an array
-      const arr = Array.isArray(listed) ? listed : (listed?.models || []);
-      modelsAvailable = arr.map(m => m?.name || m?.model || m).filter(Boolean);
-    } catch (e) {
-      console.error("listModels failed:", e?.message || e);
-    }
-
+    // All tried models failed — list what's actually available with your key
+    const modelsAvailable = await listModelsREST(apiKey);
     return {
       statusCode: 500,
       body: JSON.stringify({
         error: "Failed to generate",
-        details: (lastErr && (lastErr.message || String(lastErr))) || "All models unavailable",
+        details: lastErr?.message || "All models unavailable for your key/region.",
         tried: candidates,
         modelsAvailable
       })
     };
   } catch (err) {
-    console.error("generateStatements error:", err);
+    console.error("generateStatements fatal error:", err);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: "Failed to generate", details: err?.message || String(err) })
     };
   }
 };
+
+
 
 
 
