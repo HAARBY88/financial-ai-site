@@ -1,38 +1,39 @@
-// CommonJS function calling Gemini v1 REST directly (no SDK)
+// netlify/functions/generateStatements.js
+// Calls Gemini v1 REST. It first lists models, then picks a valid one automatically.
 
-const DEFAULT_MODELS = [
-  "gemini-1.5-flash-latest",
-  "gemini-1.5-pro-latest",
-  "gemini-pro"
-];
-
-function normalizeModelName(name = "") {
-  // Accept either "models/gemini-..." or "gemini-..."
+function normalize(name = "") {
   return name.replace(/^models\//i, "");
 }
 
-async function callGeminiREST({ apiKey, model, prompt }) {
-  const modelId = normalizeModelName(model);
-  const endpoint = `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(
-    modelId
-  )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+async function listModels(apiKey) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`);
+  if (!res.ok) {
+    throw new Error(`ListModels HTTP ${res.status}: ${await res.text()}`);
+  }
+  const data = await res.json();
+  // Some responses: { models: [...] }
+  const arr = Array.isArray(data) ? data : (data.models || []);
+  // Return array of { id, raw }
+  return arr.map(m => ({
+    id: normalize(m?.name || m?.model || ""),
+    raw: m
+  })).filter(m => m.id);
+}
 
+async function generateWithModel({ apiKey, model, prompt }) {
+  const endpoint = `https://generativelanguage.googleapis.com/v1/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }]}]
-    })
+    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }]}] })
   });
-
+  const txt = await res.text();
   if (!res.ok) {
-    const txt = await res.text();
-    const error = new Error(`Gemini HTTP ${res.status}: ${txt}`);
-    error.status = res.status;
-    throw error;
+    const e = new Error(`Gemini HTTP ${res.status}: ${txt}`);
+    e.status = res.status;
+    throw e;
   }
-
-  const data = await res.json();
+  const data = JSON.parse(txt);
   const candidates = data.candidates || [];
   const first = candidates[0] || {};
   const parts = first.content?.parts || [];
@@ -40,36 +41,13 @@ async function callGeminiREST({ apiKey, model, prompt }) {
   return textPart?.text || "No text generated.";
 }
 
-async function listModelsREST(apiKey) {
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    const arr = Array.isArray(data) ? data : (data.models || []);
-    // Return normalized IDs without "models/" so they can be used directly
-    return arr
-      .map(m => (m?.name || m?.model || ""))
-      .filter(Boolean)
-      .map(normalizeModelName);
-  } catch {
-    return [];
-  }
-}
-
 module.exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
-
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return { statusCode: 500, body: JSON.stringify({ error: "Missing GEMINI_API_KEY" }) };
 
-    // Preferred env override, normalized; otherwise defaults
-    const candidates = [
-      process.env.GEMINI_MODEL && normalizeModelName(process.env.GEMINI_MODEL),
-      ...DEFAULT_MODELS
-    ].filter(Boolean);
-
-    // Parse input
+    // Parse request
     let body = {};
     try { body = JSON.parse(event.body || "{}"); } catch {}
     const {
@@ -79,11 +57,48 @@ module.exports.handler = async (event) => {
       priorText = "",
       tbParsed = {}
     } = body;
-
     if (!priorText || !tbParsed || !Object.keys(tbParsed).length) {
       return { statusCode: 400, body: JSON.stringify({ error: "Missing required data (priorText and tbParsed)." }) };
     }
 
+    // 1) Get all models for this key
+    const all = await listModels(apiKey);
+
+    // 2) Filter models that support text generation (look for 'generateContent')
+    const supportsGenerate = (m) => {
+      const methods = m.raw?.supportedGenerationMethods || m.raw?.supportedMethods || [];
+      return Array.isArray(methods) ? methods.includes("generateContent") : true; // if field missing, assume true
+    };
+    const candidates = all.filter(supportsGenerate).map(m => m.id);
+
+    if (!candidates.length) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "No usable models available to this API key.",
+          modelsAvailable: all.map(m => m.id)
+        })
+      };
+    }
+
+    // 3) Prefer newer 1.5 models; otherwise fall back to any
+    const preferredOrder = [
+      "gemini-1.5-flash-002",
+      "gemini-1.5-pro-002",
+      "gemini-1.5-flash-latest",
+      "gemini-1.5-pro-latest",
+      "gemini-1.5-flash",
+      "gemini-1.5-pro",
+      "gemini-pro",           // older
+      "gemini-1.0-pro"       // very conservative fallback
+    ];
+    const sorted = [
+      ...preferredOrder.filter(id => candidates.includes(id)),
+      ...candidates.filter(id => !preferredOrder.includes(id))
+    ];
+    const modelToUse = sorted[0];
+
+    // 4) Build prompt
     const prompt = `
 You are an expert ${framework} financial reporting assistant.
 Generate a professional draft of current-year financial statements for ${companyName}.
@@ -111,37 +126,15 @@ Output sections:
 Keep the tone concise and professional and align to ${framework}.
 `.trim();
 
-    let lastErr = null;
-    for (const model of candidates) {
-      try {
-        const output = await callGeminiREST({ apiKey, model, prompt });
-        return { statusCode: 200, body: JSON.stringify({ output, model: normalizeModelName(model) }) };
-      } catch (err) {
-        const msg = err && (err.message || String(err));
-        console.error(`Model "${model}" error: ${msg}`);
-        lastErr = err;
-        continue; // try next candidate
-      }
-    }
+    // 5) Call the chosen model
+    const output = await generateWithModel({ apiKey, model: modelToUse, prompt });
+    return { statusCode: 200, body: JSON.stringify({ output, model: modelToUse, modelsTried: [modelToUse] }) };
 
-    const modelsAvailable = await listModelsREST(apiKey);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error: "Failed to generate",
-        details: lastErr?.message || "All models unavailable for your key/region.",
-        tried: candidates,
-        modelsAvailable
-      })
-    };
   } catch (err) {
-    console.error("generateStatements fatal error:", err);
-    return { statusCode: 500, body: JSON.stringify({ error: "Failed to generate", details: err?.message || String(err) }) };
+    console.error("generateStatements fatal:", err);
+    return { statusCode: 500, body: JSON.stringify({ error: "Failed to generate", details: err.message || String(err) }) };
   }
 };
-
-
-
 
 
 
