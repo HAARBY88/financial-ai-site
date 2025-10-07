@@ -1,14 +1,12 @@
 {
   "name": "financial-ai-site",
   "version": "1.0.0",
-  "type": "module",
   "dependencies": {
-    "@google/generative-ai": "^0.16.0",
+    "@google/generative-ai": "^0.27.0",
     "parse-multipart": "^1.0.4",
     "pdf-parse": "^1.1.1",
     "xlsx": "^0.18.5"
   }
 }
-
 
 
