@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Financial AI Filing Analysis",
   "dependencies": {
-    "@google/generative-ai": "^0.16.0",
     "parse-multipart": "^1.0.4",
     "pdf-parse": "^1.1.1",
     "xlsx": "^0.18.5"
