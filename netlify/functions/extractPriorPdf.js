@@ -1,7 +1,7 @@
 // netlify/functions/extractPriorPdf.js
-// POST JSON: { priorPdfBase64: "..." }  OR multipart/form-data with 'priorPdf' file
-// -> { text: "..." }
-
+// Accepts EITHER:
+//  1) JSON: { priorPdfBase64: "..." }  (what the page sends)
+//  2) multipart/form-data with field "priorPdf"
 const pdfParse = require("pdf-parse");
 const multiparty = require("multiparty");
 const fs = require("fs");
@@ -18,7 +18,6 @@ function parseMultipart(event) {
       ? Buffer.from(event.body, "base64")
       : Buffer.from(event.body || "", "utf8");
 
-    // Very small shim to satisfy multiparty
     form.parse(
       {
         headers: event.headers || {},
@@ -69,12 +68,14 @@ exports.handler = async (event) => {
 
     const result = await pdfParse(pdfBuffer);
     const text = (result.text || "").trim();
+
     return { statusCode: 200, body: JSON.stringify({ text }) };
   } catch (err) {
     console.error("extractPriorPdf error:", err);
     return { statusCode: 500, body: JSON.stringify({ error: "Extraction failed", details: String(err?.message || err) }) };
   }
 };
+
 
 
 
