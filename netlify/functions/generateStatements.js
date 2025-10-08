@@ -1,23 +1,13 @@
 // netlify/functions/generateStatements.js
-// Calls Gemini v1 REST. It first lists models, then picks a valid one automatically.
-
-function normalize(name = "") {
-  return name.replace(/^models\//i, "");
-}
+function normalize(name = "") { return name.replace(/^models\//i, ""); }
 
 async function listModels(apiKey) {
   const res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`);
-  if (!res.ok) {
-    throw new Error(`ListModels HTTP ${res.status}: ${await res.text()}`);
-  }
-  const data = await res.json();
-  // Some responses: { models: [...] }
+  const txt = await res.text();
+  if (!res.ok) throw new Error(`ListModels HTTP ${res.status}: ${txt}`);
+  const data = JSON.parse(txt);
   const arr = Array.isArray(data) ? data : (data.models || []);
-  // Return array of { id, raw }
-  return arr.map(m => ({
-    id: normalize(m?.name || m?.model || ""),
-    raw: m
-  })).filter(m => m.id);
+  return arr.map(m => ({ id: normalize(m?.name || m?.model || ""), raw: m })).filter(m => m.id);
 }
 
 async function generateWithModel({ apiKey, model, prompt }) {
@@ -34,8 +24,8 @@ async function generateWithModel({ apiKey, model, prompt }) {
     throw e;
   }
   const data = JSON.parse(txt);
-  const candidates = data.candidates || [];
-  const first = candidates[0] || {};
+  const cands = data.candidates || [];
+  const first = cands[0] || {};
   const parts = first.content?.parts || [];
   const textPart = parts.find(p => typeof p.text === "string");
   return textPart?.text || "No text generated.";
@@ -47,58 +37,40 @@ module.exports.handler = async (event) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return { statusCode: 500, body: JSON.stringify({ error: "Missing GEMINI_API_KEY" }) };
 
-    // Parse request
     let body = {};
     try { body = JSON.parse(event.body || "{}"); } catch {}
-    const {
-      framework = "IFRS",
-      companyName = "the company",
-      notes = "",
-      priorText = "",
-      tbParsed = {}
-    } = body;
+    const { framework = "IFRS", companyName = "the company", notes = "", priorText = "", tbParsed = {} } = body;
+
     if (!priorText || !tbParsed || !Object.keys(tbParsed).length) {
       return { statusCode: 400, body: JSON.stringify({ error: "Missing required data (priorText and tbParsed)." }) };
     }
 
-    // 1) Get all models for this key
     const all = await listModels(apiKey);
-
-    // 2) Filter models that support text generation (look for 'generateContent')
-    const supportsGenerate = (m) => {
-      const methods = m.raw?.supportedGenerationMethods || m.raw?.supportedMethods || [];
-      return Array.isArray(methods) ? methods.includes("generateContent") : true; // if field missing, assume true
-    };
-    const candidates = all.filter(supportsGenerate).map(m => m.id);
-
-    if (!candidates.length) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          error: "No usable models available to this API key.",
-          modelsAvailable: all.map(m => m.id)
-        })
-      };
+    if (!all.length) {
+      return { statusCode: 500, body: JSON.stringify({ error: "No models visible to this API key." }) };
     }
 
-    // 3) Prefer newer 1.5 models; otherwise fall back to any
-    const preferredOrder = [
+    const supportsGenerate = (m) => {
+      const methods = m.raw?.supportedGenerationMethods || m.raw?.supportedMethods || [];
+      return Array.isArray(methods) ? methods.includes("generateContent") : true;
+    };
+    const usable = all.filter(supportsGenerate).map(m => m.id);
+    if (!usable.length) {
+      return { statusCode: 500, body: JSON.stringify({ error: "No usable models for this key.", modelsAvailable: all.map(m => m.id) }) };
+    }
+
+    const preferred = [
       "gemini-1.5-flash-002",
       "gemini-1.5-pro-002",
       "gemini-1.5-flash-latest",
       "gemini-1.5-pro-latest",
       "gemini-1.5-flash",
       "gemini-1.5-pro",
-      "gemini-pro",           // older
-      "gemini-1.0-pro"       // very conservative fallback
+      "gemini-pro",
+      "gemini-1.0-pro"
     ];
-    const sorted = [
-      ...preferredOrder.filter(id => candidates.includes(id)),
-      ...candidates.filter(id => !preferredOrder.includes(id))
-    ];
-    const modelToUse = sorted[0];
+    const chosen = preferred.find(m => usable.includes(m)) || usable[0];
 
-    // 4) Build prompt
     const prompt = `
 You are an expert ${framework} financial reporting assistant.
 Generate a professional draft of current-year financial statements for ${companyName}.
@@ -126,10 +98,8 @@ Output sections:
 Keep the tone concise and professional and align to ${framework}.
 `.trim();
 
-    // 5) Call the chosen model
-    const output = await generateWithModel({ apiKey, model: modelToUse, prompt });
-    return { statusCode: 200, body: JSON.stringify({ output, model: modelToUse, modelsTried: [modelToUse] }) };
-
+    const output = await generateWithModel({ apiKey, model: chosen, prompt });
+    return { statusCode: 200, body: JSON.stringify({ output, model: chosen }) };
   } catch (err) {
     console.error("generateStatements fatal:", err);
     return { statusCode: 500, body: JSON.stringify({ error: "Failed to generate", details: err.message || String(err) }) };
