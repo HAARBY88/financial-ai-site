@@ -2,224 +2,343 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Draft Financial Statements (MVP)</title>
+  <title>Financial AI Filing Analysis</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: Arial, sans-serif; max-width: 900px; margin: auto; padding: 2rem; background:#f7f9fc; color:#222; }
-    h1, h2 { color:#083a7a; }
-    .card { background:#fff; padding:1rem 1.25rem; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.08); margin:1rem 0; }
-    label { display:block; margin:0.5rem 0 0.25rem; font-weight:600; }
-    input, select, button, textarea { width:100%; padding:0.6rem; font-size:1rem; }
-    button { background:#0b66c3; color:#fff; border:0; border-radius:6px; cursor:pointer; margin-top:0.75rem; }
-    button:hover { background:#0a58a6; }
-    .row { display:grid; gap:0.75rem; grid-template-columns:1fr 1fr; }
-    .mono { white-space:pre-wrap; background:#f2f4f7; padding:0.75rem; border-radius:6px; overflow:auto; max-height:260px; }
-    small { color:#555; }
-    .ok { color:#1f7a1f; }
-    .err { color:#b00020; }
+    :root {
+      --brand: #004080;
+      --brand2: #0066cc;
+      --bg: #f4f6f8;
+      --card: #fff;
+      --text: #333;
+      --muted: #777;
+      --err: #b00020;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    h1,h2,h3 { color: var(--brand); margin: 0 0 12px; }
+    .card {
+      background: var(--card);
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      padding: 16px 18px;
+      margin: 16px 0;
+    }
+    .row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+    .row > div { display: flex; flex-direction: column; gap: 8px; }
+    label { font-weight: 600; }
+    input[type="file"], input[type="text"], select, textarea {
+      padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;
+      background: #fff;
+    }
+    textarea { min-height: 96px; resize: vertical; }
+    button {
+      background: var(--brand);
+      color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { background: var(--brand2); }
+    .muted { color: var(--muted); }
+    .loading { color: #555; }
+    .err { color: var(--err); white-space: pre-wrap; }
+    pre {
+      background: #f7f7f7; border: 1px solid #eee; border-radius: 8px; padding: 12px;
+      white-space: pre-wrap; overflow-x: auto;
+    }
+    .footer-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
   </style>
 </head>
 <body>
-  <h1>Draft Financial Statements</h1>
-  <p>Steps: 1) Upload prior PDF → 2) Pick standard → 3) Upload trial balances → 4) Generate draft.</p>
+  <h1>Financial AI Filing Analysis</h1>
 
-  <!-- 1) Upload Prior-Year PDF (Base64 to Netlify function) -->
+  <!-- Section 0: Company / context -->
+  <div class="card">
+    <h2>0) Context</h2>
+    <div class="row">
+      <div>
+        <label for="companyName">Company name (optional)</label>
+        <input id="companyName" type="text" placeholder="e.g., Anglo London Limited" />
+      </div>
+      <div>
+        <label for="framework">Accounting framework</label>
+        <select id="framework">
+          <option value="IFRS" selected>IFRS</option>
+          <option value="US GAAP">US GAAP</option>
+        </select>
+      </div>
+    </div>
+    <label for="notes" style="margin-top:10px;">Notes to the assistant (optional)</label>
+    <textarea id="notes" placeholder="Anything special to highlight, e.g., restatements, new standards adoption, one-offs…"></textarea>
+  </div>
+
+  <!-- Section 1: Prior-year PDF -->
   <div class="card">
     <h2>1) Upload Prior-Year Financial Statements (PDF)</h2>
-    <label for="priorPdfInput">Prior-year PDF</label>
-    <input type="file" id="priorPdfInput" accept=".pdf" />
-    <button id="uploadPriorPdfBtn">Extract Prior-Year Style</button>
-    <div id="priorPreview" class="mono"><small>Preview will appear here…</small></div>
+    <div class="row">
+      <div>
+        <label for="priorPdf">Prior-year PDF</label>
+        <input id="priorPdf" type="file" accept="application/pdf" />
+      </div>
+      <div style="align-self:end;">
+        <button id="btnExtractPrior">Extract Prior-Year Style</button>
+      </div>
+    </div>
+    <div id="priorPreview" class="muted">Preview will appear here…</div>
+    <div class="footer-note">We extract just enough text to capture tone, headings and structure.</div>
   </div>
 
-  <!-- 2) Framework -->
-  <div class="card">
-    <h2>2) Choose Accounting Standard</h2>
-    <label for="framework">Framework</label>
-    <select id="framework">
-      <option value="IFRS">IFRS</option>
-      <option value="US GAAP">US GAAP</option>
-    </select>
-  </div>
-
-  <!-- 3) Trial Balances -->
+  <!-- Section 3: Trial balances -->
   <div class="card">
     <h2>3) Upload Trial Balances (Excel)</h2>
     <div class="row">
       <div>
-        <label for="tbPrior">Prior year TB (Excel)</label>
-        <input type="file" id="tbPrior" name="tbPrior" accept=".xlsx,.xls" />
+        <label for="tbPrior">Prior-year TB (.xlsx/.xls)</label>
+        <input id="tbPrior" type="file" accept=".xlsx,.xls" />
       </div>
       <div>
-        <label for="tbCurrent">Current year TB (Excel)</label>
-        <input type="file" id="tbCurrent" name="tbCurrent" accept=".xlsx,.xls" />
+        <label for="tbCurrent">Current-year TB (.xlsx/.xls)</label>
+        <input id="tbCurrent" type="file" accept=".xlsx,.xls" />
       </div>
     </div>
-    <button id="parseTbBtn">Read Trial Balances</button>
-    <div id="tbPreview" class="mono"><small>TB check will appear here…</small></div>
+    <div style="margin-top:10px;">
+      <button id="btnReadTBs">Read Trial Balances</button>
+    </div>
+    <div id="tbOutput" class="muted" style="margin-top:10px;">TB check will appear here…</div>
   </div>
 
-  <!-- 4) Generate -->
+  <!-- Section 4: Generate -->
   <div class="card">
     <h2>4) Generate Draft Statements</h2>
-    <label for="companyName">Company name (optional)</label>
-    <input type="text" id="companyName" placeholder="e.g. Anglo London Limited"/>
-    <label for="notes">Notes / special instructions (optional)</label>
-    <textarea id="notes" rows="4" placeholder="e.g. Show revenue breakdown; highlight lease liabilities;"></textarea>
     <button id="generateBtn">Generate Draft with Gemini</button>
-    <div id="aiOutput" class="mono"><small>Draft will appear here…</small></div>
+    <div id="aiOutput" class="muted" style="margin-top:10px;">Draft will appear here…</div>
+  </div>
+
+  <!-- Diagnostics (optional) -->
+  <div class="card">
+    <h3>Diagnostics</h3>
+    <pre id="diagnostics" class="muted">No actions yet…</pre>
   </div>
 
   <script>
-    /** Utility: file -> base64 string */
-    async function fileToBase64(file) {
-      const arrayBuffer = await file.arrayBuffer();
-      let binary = "";
-      const bytes = new Uint8Array(arrayBuffer);
-      const chunk = 0x8000;
-      for (let i = 0; i < bytes.length; i += chunk) {
-        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-      }
-      return btoa(binary);
-    }
+    (function () {
+      // ---- Utilities ----
+      const $ = (sel) => document.querySelector(sel);
+      const setHTML = (sel, html, cls) => {
+        const el = $(sel);
+        if (!el) return;
+        if (cls !== undefined) el.className = cls;
+        el.innerHTML = html;
+      };
+      const toBase64 = (file) => new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error("Failed to read file"));
+        fr.onload = () => resolve(String(fr.result).split(",")[1] || "");
+        fr.readAsDataURL(file);
+      });
+      const savePriorText = (txt) => sessionStorage.setItem("priorText", txt || "");
+      const loadPriorText = () => sessionStorage.getItem("priorText") || "";
+      const saveTbParsed = (obj) => sessionStorage.setItem("tbParsed", JSON.stringify(obj || {}));
+      const loadTbParsed = () => {
+        const raw = sessionStorage.getItem("tbParsed") || "";
+        try { return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+      };
 
-    // 1) Upload prior PDF (send Base64 body; do NOT set Content-Type)
-    document.getElementById("uploadPriorPdfBtn").addEventListener("click", async () => {
-      const input = document.getElementById("priorPdfInput");
-      const previewDiv = document.getElementById("priorPreview");
-
-      if (!input.files || !input.files[0]) {
-        previewDiv.innerHTML = "<span class='err'>Please choose a PDF file.</span>";
-        return;
-      }
-
-      try {
-        previewDiv.textContent = "Uploading and extracting…";
-        const base64 = await fileToBase64(input.files[0]);
-
-        const res = await fetch("/.netlify/functions/extractPriorPdf", {
-          method: "POST",
-          body: base64
-        });
-
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          previewDiv.innerHTML = `<span class='err'>${data.error || "Upload failed."}</span>`;
-          return;
-        }
-
-        const previewText = data.preview || data.extractedText || "";
-        const fullText = data.fullText || data.extractedText || "";
-        if (!previewText && !fullText) {
-          previewDiv.innerHTML = "<span class='err'>No text extracted from PDF.</span>";
-          return;
-        }
-
-        previewDiv.innerHTML = `<span class='ok'>OK</span>\n\n${(previewText || fullText).slice(0, 1500)}${(previewText || fullText).length > 1500 ? "…" : ""}`;
-        sessionStorage.setItem("priorText", fullText || previewText);
-      } catch (err) {
-        previewDiv.innerHTML = `<span class='err'>Error: ${err.message}</span>`;
-      }
-    });
-
-    // 3) Read Trial Balances (multipart FormData) — makes sure names are tbPrior & tbCurrent
-    document.getElementById("parseTbBtn").addEventListener("click", async () => {
-      const priorFile = document.getElementById("tbPrior").files[0];
-      const currentFile = document.getElementById("tbCurrent").files[0];
-      const tbDiv = document.getElementById("tbPreview");
-
-      // Front-end guard (stops common “Both tbPrior and tbCurrent required”)
-      if (!priorFile || !currentFile) {
-        tbDiv.innerHTML = "<span class='err'>Please choose both prior and current year TB files.</span>";
-        return;
-      }
-
-      const fd = new FormData();
-      fd.append("tbPrior", priorFile);   // IMPORTANT: exact field name
-      fd.append("tbCurrent", currentFile);
-
-      tbDiv.textContent = "Reading trial balances…";
-      try {
-        const res = await fetch("/.netlify/functions/parseTrialBalances", {
-          method: "POST",
-          body: fd
-        });
-        const data = await res.json().catch(()=> ({}));
-
-        if (!res.ok) {
-          // Show what the server received to spot field-name typos
-          const extra = data.receivedFields ? `\n\nReceived fields: ${data.receivedFields}` : "";
-          tbDiv.innerHTML = `<span class='err'>${data.error || "Error reading TB files."}${extra}</span>`;
-          return;
-        }
-
-        tbDiv.textContent = data.summary || "Parsed.";
-        sessionStorage.setItem("tbParsed", JSON.stringify(data.tbParsed || {}));
-      } catch (err) {
-        tbDiv.innerHTML = `<span class='err'>Error: ${err.message}</span>`;
-      }
-    });
-
-    // 4) Generate draft statements with Gemini
-<script>
-  // ...keep your other code...
-
-  document.getElementById("generateBtn").addEventListener("click", async () => {
-    const framework = document.getElementById("framework").value || "IFRS";
-    const companyName = document.getElementById("companyName").value || "";
-    const notes = document.getElementById("notes").value || "";
-    const priorText = sessionStorage.getItem("priorText") || "";
-    const tbParsedStr = sessionStorage.getItem("tbParsed") || "";
-
-    const outDiv = document.getElementById("aiOutput");
-
-    // Validate inputs before calling the function
-    const errs = [];
-    if (!priorText) errs.push("• Upload the prior-year PDF (step 1)");
-    if (!tbParsedStr) errs.push("• Upload & read both trial balances (step 3)");
-    if (errs.length) {
-      outDiv.innerHTML = `<span class="err">Please complete these steps first:\n${errs.join("\n")}</span>`;
-      return;
-    }
-
-    outDiv.textContent = "Generating draft with Gemini…";
-
-    let tbParsed = {};
-    try { tbParsed = JSON.parse(tbParsedStr); } catch {
-      outDiv.innerHTML = `<span class="err">Trial balance data could not be read. Click “Read Trial Balances” again.</span>`;
-      return;
-    }
-
-    try {
-      const res = await fetch("/.netlify/functions/generateStatements", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ framework, companyName, notes, priorText, tbParsed })
+      // Global JS error catcher to help surface issues
+      window.addEventListener("error", (e) => {
+        console.error("Global JS error:", e.message);
       });
 
-      const text = await res.text(); // read raw so we can show parse errors
-      let data = {};
-      try { data = JSON.parse(text); } catch { /* leave as {} */ }
+      // ---- Grab elements (ensure IDs match) ----
+      const priorPdf = $("#priorPdf");
+      const btnExtractPrior = $("#btnExtractPrior");
+      const priorPreview = $("#priorPreview");
+      const tbPrior = $("#tbPrior");
+      const tbCurrent = $("#tbCurrent");
+      const btnReadTBs = $("#btnReadTBs");
+      const tbOutput = $("#tbOutput");
+      const framework = $("#framework");
+      const companyName = $("#companyName");
+      const notes = $("#notes");
+      const btnGenerate = $("#generateBtn");
+      const aiOutput = $("#aiOutput");
+      const diagnostics = $("#diagnostics");
 
-      if (!res.ok) {
-        const debug = [
-          data.error && `Error: ${data.error}`,
-          data.details && `Details: ${data.details}`,
-          data.model && `Model: ${data.model}`,
-          data.tried && `Tried: ${Array.isArray(data.tried) ? data.tried.join(", ") : data.tried}`,
-          data.modelsAvailable && `Available: ${Array.isArray(data.modelsAvailable) ? data.modelsAvailable.join(", ") : data.modelsAvailable}`,
-          (!data.error && text) && `Raw: ${text}`
-        ].filter(Boolean).join("\n");
-        outDiv.innerHTML = `<pre class="err">❌ Generation failed.\n${debug || "No details returned."}</pre>`;
-        return;
+      // Initial UI from cache
+      const cachedPrior = loadPriorText();
+      if (cachedPrior) {
+        setHTML("#priorPreview", `<strong>Extracted preview (cached, first 600 chars):</strong><br><pre>${cachedPrior.slice(0,600)}</pre>`);
+      }
+      const cachedTB = loadTbParsed();
+      if (cachedTB.prior && cachedTB.current) {
+        setHTML("#tbOutput", `<strong>Cached TB:</strong> prior=${Object.keys(cachedTB.prior).length} lines, current=${Object.keys(cachedTB.current).length} lines`);
       }
 
-      outDiv.innerHTML = `<pre>${data.output || "No output"}\n\n(Using model: ${data.model || "unknown"})</pre>`;
-    } catch (err) {
-      outDiv.innerHTML = `<span class="err">Network error: ${err.message}</span>`;
-    }
-  });
-</script>
+      // ---- 1) Extract prior PDF ----
+      btnExtractPrior.addEventListener("click", async () => {
+        try {
+          if (!priorPdf.files?.[0]) {
+            setHTML("#priorPreview", "⚠️ Please choose a prior-year PDF first.", "err");
+            return;
+          }
+          setHTML("#priorPreview", "⏳ Reading PDF…", "loading");
+          const base64 = await toBase64(priorPdf.files[0]);
+
+          setHTML("#priorPreview", "⏳ Extracting text from PDF…", "loading");
+
+          const res = await fetch("/.netlify/functions/extractPriorPdf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ priorPdfBase64: base64 })
+          });
+
+          const raw = await res.text();
+          let data = {};
+          try { data = JSON.parse(raw); } catch {} // if HTML, avoid JSON parse crash
+
+          if (!res.ok) {
+            console.error("extractPriorPdf failed:", raw);
+            setHTML("#priorPreview", `<span class="err">❌ Extract failed.\n${data.error || raw}</span>`, "err");
+            diagnostics.textContent = `extractPriorPdf error:\n${data.error || raw}`;
+            return;
+          }
+
+          if (!data.text) {
+            setHTML("#priorPreview", `<span class="err">❌ No text extracted from PDF.</span>`, "err");
+            diagnostics.textContent = "extractPriorPdf: empty text";
+            return;
+          }
+
+          savePriorText(data.text);
+          setHTML("#priorPreview", `<strong>Extracted preview (first 600 chars):</strong><br><pre>${data.text.slice(0,600)}</pre>`);
+          diagnostics.textContent = "extractPriorPdf OK";
+        } catch (err) {
+          console.error("extractPriorPdf exception:", err);
+          setHTML("#priorPreview", `<span class="err">❌ ${err.message}</span>`, "err");
+          diagnostics.textContent = `extractPriorPdf exception: ${err.message}`;
+        }
+      });
+
+      // ---- 3) Read trial balances ----
+      btnReadTBs.addEventListener("click", async () => {
+        try {
+          if (!tbPrior.files?.[0] || !tbCurrent.files?.[0]) {
+            setHTML("#tbOutput", "⚠️ Please choose both the prior and current TB files.", "err");
+            return;
+          }
+          setHTML("#tbOutput", "⏳ Reading trial balances…", "loading");
+
+          const fd = new FormData();
+          fd.append("tbPrior", tbPrior.files[0]);
+          fd.append("tbCurrent", tbCurrent.files[0]);
+
+          const res = await fetch("/.netlify/functions/readTrialBalances", {
+            method: "POST",
+            body: fd
+          });
+
+          const raw = await res.text();
+          let data = {};
+          try { data = JSON.parse(raw); } catch {}
+
+          if (!res.ok) {
+            console.error("readTrialBalances failed:", raw);
+            setHTML("#tbOutput", `<span class="err">❌ TB read failed.\n${data.error || raw}</span>`, "err");
+            diagnostics.textContent = `readTrialBalances error:\n${data.error || raw}`;
+            return;
+          }
+
+          if (!data.tbParsed || !data.tbParsed.prior || !data.tbParsed.current) {
+            setHTML("#tbOutput", `<span class="err">❌ TB parse returned empty data.</span>`, "err");
+            diagnostics.textContent = "readTrialBalances: empty tbParsed";
+            return;
+          }
+
+          saveTbParsed(data.tbParsed);
+
+          const sample = {
+            samplePrior: Object.entries(data.tbParsed.prior).slice(0, 5),
+            sampleCurrent: Object.entries(data.tbParsed.current).slice(0, 5)
+          };
+          setHTML("#tbOutput",
+            `<strong>Parsed:</strong> prior=${Object.keys(data.tbParsed.prior).length} lines, current=${Object.keys(data.tbParsed.current).length} lines<br><pre>${JSON.stringify(sample, null, 2)}</pre>`
+          );
+          diagnostics.textContent = "readTrialBalances OK";
+        } catch (err) {
+          console.error("readTrialBalances exception:", err);
+          setHTML("#tbOutput", `<span class="err">❌ ${err.message}</span>`, "err");
+          diagnostics.textContent = `readTrialBalances exception: ${err.message}`;
+        }
+      });
+
+      // ---- 4) Generate draft statements with Gemini ----
+      btnGenerate.addEventListener("click", async () => {
+        try {
+          const priorText = loadPriorText();
+          const tbParsed = loadTbParsed();
+
+          const errs = [];
+          if (!priorText) errs.push("• Upload & extract the prior-year PDF (Section 1).");
+          if (!tbParsed || !tbParsed.prior || !tbParsed.current) errs.push("• Upload & read both TB files (Section 3).");
+          if (errs.length) {
+            setHTML("#aiOutput", `<span class="err">Please complete these steps first:\n${errs.join("\n")}</span>`, "err");
+            diagnostics.textContent = "generateStatements blocked: missing inputs";
+            return;
+          }
+
+          setHTML("#aiOutput", "⏳ Generating draft with Gemini…", "loading");
+
+          const payload = {
+            framework: framework?.value || "IFRS",
+            companyName: companyName?.value || "",
+            notes: notes?.value || "",
+            priorText,
+            tbParsed
+          };
+
+          const res = await fetch("/.netlify/functions/generateStatements", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          const raw = await res.text(); // read raw first in case it's HTML
+          let data = {};
+          try { data = JSON.parse(raw); } catch {}
+
+          if (!res.ok) {
+            const details = [
+              data.error && `Error: ${data.error}`,
+              data.details && `Details: ${data.details}`,
+              data.model && `Model: ${data.model}`,
+              data.modelsAvailable && `Available: ${Array.isArray(data.modelsAvailable) ? data.modelsAvailable.join(", ") : data.modelsAvailable}`,
+              (!data.error && raw && raw.trim().startsWith("<")) && "Server returned HTML (likely 404). Check Netlify functions path/name."
+            ].filter(Boolean).join("\n");
+
+            setHTML("#aiOutput", `<pre class="err">❌ Generation failed.\n${details || raw || "No details returned."}</pre>`, "err");
+            diagnostics.textContent = `generateStatements error:\n${details || raw}`;
+            console.error("generateStatements failed:", raw);
+            return;
+          }
+
+          setHTML("#aiOutput", `<pre>${data.output || "No output"}\n\n(Using model: ${data.model || "unknown"})</pre>`);
+          diagnostics.textContent = `generateStatements OK (model: ${data.model || "unknown"})`;
+        } catch (err) {
+          console.error("generateStatements exception:", err);
+          setHTML("#aiOutput", `<span class="err">❌ ${err.message}</span>`, "err");
+          diagnostics.textContent = `generateStatements exception: ${err.message}`;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
+
 
 
 
