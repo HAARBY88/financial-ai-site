@@ -5,4 +5,7 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+  # keep these external to avoid bundling issues
   external_node_modules = ["pdf-parse", "multiparty", "xlsx", "node-fetch"]
+  # ⬇️ increase max execution time (Netlify will cap based on your plan)
+  timeout = 26
