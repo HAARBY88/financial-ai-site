@@ -23,6 +23,8 @@
     .err { color: var(--err); white-space: pre-wrap; }
     pre { background: #f7f7f7; border: 1px solid #eee; border-radius: 8px; padding: 12px; white-space: pre-wrap; overflow-x: auto; }
     .footer-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .kpis { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
+    .kpis div { background:#eef4ff; color:#123; padding:8px 10px; border-radius:8px; border:1px solid #d9e4ff; }
   </style>
 </head>
 <body>
@@ -81,6 +83,7 @@
       <button id="btnReadTBs">Read Trial Balances (client-side)</button>
     </div>
     <div id="tbOutput" class="muted" style="margin-top:10px;">TB check will appear here…</div>
+    <div class="kpis" id="tbKpis" style="display:none;"></div>
   </div>
 
   <!-- Section 4: Generate -->
@@ -90,7 +93,7 @@
     <div id="aiOutput" class="muted" style="margin-top:10px;">Draft will appear here…</div>
   </div>
 
-  <!-- Diagnostics (optional) -->
+  <!-- Diagnostics (server/client debug) -->
   <div class="card">
     <h3>Diagnostics</h3>
     <pre id="diagnostics" class="muted">No actions yet…</pre>
@@ -219,6 +222,7 @@
     const tbCurrent = $("#tbCurrent");
     const btnReadTBs = $("#btnReadTBs");
     const tbOutput = $("#tbOutput");
+    const tbKpis = $("#tbKpis");
 
     const framework = $("#framework");
     const companyName = $("#companyName");
@@ -235,6 +239,12 @@
     const cachedTB = loadTbParsed();
     if (cachedTB?.prior && cachedTB?.current) {
       setHTML("#tbOutput", `<strong>Cached TB:</strong> prior=${Object.keys(cachedTB.prior).length} lines, current=${Object.keys(cachedTB.current).length} lines`);
+      tbKpis.style.display = "flex";
+      tbKpis.innerHTML = `
+        <div>Total prior: ${Number(cachedTB.totals?.prior||0).toLocaleString()}</div>
+        <div>Total current: ${Number(cachedTB.totals?.current||0).toLocaleString()}</div>
+        <div>Δ: ${(Number(cachedTB.totals?.current||0)-Number(cachedTB.totals?.prior||0)).toLocaleString()}</div>
+      `;
     }
 
     // Section 1: extract prior PDF (calls Netlify function)
@@ -259,9 +269,13 @@
         try { data = JSON.parse(raw); } catch {}
 
         if (!res.ok) {
+          const msg = [
+            data.error && `Error: ${data.error}`,
+            data.details && `Details: ${data.details}`
+          ].filter(Boolean).join("\n");
+          setHTML("#priorPreview", `<span class="err">❌ Extract failed.\n${msg || raw || "No details returned."}</span>`, "err");
+          diagnostics.textContent = `extractPriorPdf error:\n${msg || raw}`;
           console.error("extractPriorPdf failed:", raw);
-          setHTML("#priorPreview", `<span class="err">❌ Extract failed.\n${data.error || raw}</span>`, "err");
-          diagnostics.textContent = `extractPriorPdf error:\n${data.error || raw}`;
           return;
         }
         if (!data.text) {
@@ -302,13 +316,19 @@
           `<strong>Totals:</strong> prior=${totalPrior.toLocaleString()}, current=${totalCurrent.toLocaleString()}<br>` +
           `<pre>${JSON.stringify(sample, null, 2)}</pre>`
         );
+        tbKpis.style.display = "flex";
+        tbKpis.innerHTML = `
+          <div>Total prior: ${totalPrior.toLocaleString()}</div>
+          <div>Total current: ${totalCurrent.toLocaleString()}</div>
+          <div>Δ: ${(totalCurrent-totalPrior).toLocaleString()}</div>
+        `;
       } catch (err) {
         console.error("Client TB parse error:", err);
         setHTML("#tbOutput", `<span class="err">❌ ${err.message}</span>`, "err");
       }
     });
 
-    // Section 4: generate draft with Gemini
+    // Section 4: generate draft with Gemini — with rich error display
     btnGenerate.addEventListener("click", async () => {
       try {
         const priorText = loadPriorText();
@@ -342,13 +362,16 @@
         try { data = JSON.parse(raw); } catch {}
 
         if (!res.ok) {
+          // 🔎 Show everything we have from the function
           const details = [
             data.error && `Error: ${data.error}`,
             data.details && `Details: ${data.details}`,
-            data.model && `Model: ${data.model}`,
-            data.modelsAvailable && `Available: ${Array.isArray(data.modelsAvailable) ? data.modelsAvailable.join(", ") : data.modelsAvailable}`,
-            (!data.error && raw && raw.trim().startsWith("<")) && "Server returned HTML (likely 404). Check Netlify functions path/name."
+            data.modelTried && `Model tried: ${data.modelTried}`,
+            data.endpoint && `Endpoint: ${data.endpoint}`,
+            data.modelsAvailable && `Available: ${Array.isArray(data.modelsAvailable)? data.modelsAvailable.join(", ") : data.modelsAvailable}`,
+            data.responseBody && `Response body:\n${data.responseBody}`
           ].filter(Boolean).join("\n");
+
           setHTML("#aiOutput", `<pre class="err">❌ Generation failed.\n${details || raw || "No details returned."}</pre>`, "err");
           diagnostics.textContent = `generateStatements error:\n${details || raw}`;
           console.error("generateStatements failed:", raw);
@@ -370,8 +393,6 @@
   </script>
 </body>
 </html>
-
-
 
 
 
