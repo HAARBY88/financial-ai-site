@@ -1,13 +1,22 @@
 // netlify/functions/generateStatements.js
-function normalize(name = "") { return name.replace(/^models\//i, ""); }
+// REST-only (no SDK). Lists models, picks one you actually have, then calls generateContent.
+
+function normalize(name = "") {
+  // Accept "models/gemini-2.5-flash" or "gemini-2.5-flash" and return bare ID
+  return name.replace(/^models\//i, "");
+}
 
 async function listModels(apiKey) {
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`);
+  const url = `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url);
   const txt = await res.text();
   if (!res.ok) throw new Error(`ListModels HTTP ${res.status}: ${txt}`);
   const data = JSON.parse(txt);
   const arr = Array.isArray(data) ? data : (data.models || []);
-  return arr.map(m => ({ id: normalize(m?.name || m?.model || ""), raw: m })).filter(m => m.id);
+  return arr.map(m => ({
+    id: normalize(m?.name || m?.model || ""),
+    raw: m
+  })).filter(m => m.id);
 }
 
 async function generateWithModel({ apiKey, model, prompt }) {
@@ -15,17 +24,14 @@ async function generateWithModel({ apiKey, model, prompt }) {
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }]}] })
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }]}]
+    })
   });
   const txt = await res.text();
-  if (!res.ok) {
-    const e = new Error(`Gemini HTTP ${res.status}: ${txt}`);
-    e.status = res.status;
-    throw e;
-  }
+  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${txt}`);
   const data = JSON.parse(txt);
-  const cands = data.candidates || [];
-  const first = cands[0] || {};
+  const first = (data.candidates || [])[0] || {};
   const parts = first.content?.parts || [];
   const textPart = parts.find(p => typeof p.text === "string");
   return textPart?.text || "No text generated.";
@@ -34,43 +40,58 @@ async function generateWithModel({ apiKey, model, prompt }) {
 module.exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return { statusCode: 500, body: JSON.stringify({ error: "Missing GEMINI_API_KEY" }) };
 
+    // Parse input safely
     let body = {};
     try { body = JSON.parse(event.body || "{}"); } catch {}
-    const { framework = "IFRS", companyName = "the company", notes = "", priorText = "", tbParsed = {} } = body;
+    const {
+      framework = "IFRS",
+      companyName = "the company",
+      notes = "",
+      priorText = "",
+      tbParsed = {}
+    } = body;
 
     if (!priorText || !tbParsed || !Object.keys(tbParsed).length) {
       return { statusCode: 400, body: JSON.stringify({ error: "Missing required data (priorText and tbParsed)." }) };
     }
 
+    // 1) Discover models available to THIS key
     const all = await listModels(apiKey);
-    if (!all.length) {
-      return { statusCode: 500, body: JSON.stringify({ error: "No models visible to this API key." }) };
-    }
 
+    // 2) Keep only those that can generate text
     const supportsGenerate = (m) => {
       const methods = m.raw?.supportedGenerationMethods || m.raw?.supportedMethods || [];
       return Array.isArray(methods) ? methods.includes("generateContent") : true;
     };
     const usable = all.filter(supportsGenerate).map(m => m.id);
+
     if (!usable.length) {
-      return { statusCode: 500, body: JSON.stringify({ error: "No usable models for this key.", modelsAvailable: all.map(m => m.id) }) };
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "No usable models for this key.", modelsAvailable: all.map(m => m.id) })
+      };
     }
 
-    const preferred = [
-      "gemini-1.5-flash-002",
-      "gemini-1.5-pro-002",
-      "gemini-1.5-flash-latest",
-      "gemini-1.5-pro-latest",
-      "gemini-1.5-flash",
-      "gemini-1.5-pro",
-      "gemini-pro",
-      "gemini-1.0-pro"
+    // 3) Prefer your ACTUAL catalogue (from your /geminiModels output)
+    const preferredOrder = [
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-001",
+      "gemini-2.5-flash-lite",
+      "gemini-2.0-flash-lite"
     ];
-    const chosen = preferred.find(m => usable.includes(m)) || usable[0];
+    const sorted = [
+      ...preferredOrder.filter(id => usable.includes(id)),
+      ...usable.filter(id => !preferredOrder.includes(id))
+    ];
+    const modelToUse = sorted[0];
 
+    // 4) Build prompt
     const prompt = `
 You are an expert ${framework} financial reporting assistant.
 Generate a professional draft of current-year financial statements for ${companyName}.
@@ -98,14 +119,15 @@ Output sections:
 Keep the tone concise and professional and align to ${framework}.
 `.trim();
 
-    const output = await generateWithModel({ apiKey, model: chosen, prompt });
-    return { statusCode: 200, body: JSON.stringify({ output, model: chosen }) };
+    // 5) Generate
+    const output = await generateWithModel({ apiKey, model: modelToUse, prompt });
+    return { statusCode: 200, body: JSON.stringify({ output, model: modelToUse }) };
+
   } catch (err) {
     console.error("generateStatements fatal:", err);
     return { statusCode: 500, body: JSON.stringify({ error: "Failed to generate", details: err.message || String(err) }) };
   }
 };
-
 
 
 
