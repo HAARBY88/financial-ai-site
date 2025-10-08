@@ -1,10 +1,9 @@
 // netlify/functions/generateStatements.js
-// REST-only (no SDK). Lists models, picks one you actually have, then calls generateContent.
+// Uses Gemini v1 REST directly. Discovers models for your key, picks a valid one, generates text.
 
-function normalize(name = "") {
-  // Accept "models/gemini-2.5-flash" or "gemini-2.5-flash" and return bare ID
-  return name.replace(/^models\//i, "");
-}
+const fetch = require("node-fetch"); // v2.6.7
+
+function normalize(name = "") { return name.replace(/^models\//i, ""); }
 
 async function listModels(apiKey) {
   const url = `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`;
@@ -13,10 +12,7 @@ async function listModels(apiKey) {
   if (!res.ok) throw new Error(`ListModels HTTP ${res.status}: ${txt}`);
   const data = JSON.parse(txt);
   const arr = Array.isArray(data) ? data : (data.models || []);
-  return arr.map(m => ({
-    id: normalize(m?.name || m?.model || ""),
-    raw: m
-  })).filter(m => m.id);
+  return arr.map(m => ({ id: normalize(m?.name || m?.model || ""), raw: m })).filter(m => m.id);
 }
 
 async function generateWithModel({ apiKey, model, prompt }) {
@@ -24,9 +20,7 @@ async function generateWithModel({ apiKey, model, prompt }) {
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }]}]
-    })
+    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }]}] })
   });
   const txt = await res.text();
   if (!res.ok) throw new Error(`Gemini HTTP ${res.status}: ${txt}`);
@@ -40,26 +34,18 @@ async function generateWithModel({ apiKey, model, prompt }) {
 module.exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
-
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return { statusCode: 500, body: JSON.stringify({ error: "Missing GEMINI_API_KEY" }) };
 
-    // Parse input safely
     let body = {};
     try { body = JSON.parse(event.body || "{}"); } catch {}
-    const {
-      framework = "IFRS",
-      companyName = "the company",
-      notes = "",
-      priorText = "",
-      tbParsed = {}
-    } = body;
+    const { framework = "IFRS", companyName = "the company", notes = "", priorText = "", tbParsed = {} } = body;
 
-    if (!priorText || !tbParsed || !Object.keys(tbParsed).length) {
+    if (!priorText || !tbParsed || !tbParsed.prior || !tbParsed.current) {
       return { statusCode: 400, body: JSON.stringify({ error: "Missing required data (priorText and tbParsed)." }) };
     }
 
-    // 1) Discover models available to THIS key
+    // 1) Discover models for this key
     const all = await listModels(apiKey);
 
     // 2) Keep only those that can generate text
@@ -70,13 +56,10 @@ module.exports.handler = async (event) => {
     const usable = all.filter(supportsGenerate).map(m => m.id);
 
     if (!usable.length) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "No usable models for this key.", modelsAvailable: all.map(m => m.id) })
-      };
+      return { statusCode: 500, body: JSON.stringify({ error: "No usable models for this key.", modelsAvailable: all.map(m => m.id) }) };
     }
 
-    // 3) Prefer your ACTUAL catalogue (from your /geminiModels output)
+    // Prefer faster/cheaper first, then others
     const preferredOrder = [
       "gemini-2.5-flash",
       "gemini-2.5-pro",
@@ -91,7 +74,6 @@ module.exports.handler = async (event) => {
     ];
     const modelToUse = sorted[0];
 
-    // 4) Build prompt
     const prompt = `
 You are an expert ${framework} financial reporting assistant.
 Generate a professional draft of current-year financial statements for ${companyName}.
@@ -119,17 +101,13 @@ Output sections:
 Keep the tone concise and professional and align to ${framework}.
 `.trim();
 
-    // 5) Generate
     const output = await generateWithModel({ apiKey, model: modelToUse, prompt });
     return { statusCode: 200, body: JSON.stringify({ output, model: modelToUse }) };
-
   } catch (err) {
     console.error("generateStatements fatal:", err);
-    return { statusCode: 500, body: JSON.stringify({ error: "Failed to generate", details: err.message || String(err) }) };
+    return { statusCode: 500, body: JSON.stringify({ error: "Failed to generate", details: err?.message || String(err) }) };
   }
 };
-
-
 
 
 
