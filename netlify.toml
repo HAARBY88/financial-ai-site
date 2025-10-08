@@ -5,6 +5,4 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  # ⬇️ Keep these out of the bundle so their internal file paths work at runtime
   external_node_modules = ["pdf-parse", "multiparty", "xlsx", "node-fetch"]
-
