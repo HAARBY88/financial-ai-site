@@ -1,11 +1,10 @@
 {
+  "name": "financial-ai-site",
+  "version": "1.0.0",
+  "private": true,
   "dependencies": {
     "@google/genai": "^0.8.0",
-    "node-fetch": "2.6.7",
-    "multiparty": "^4.2.3",
-    "pdf-parse": "^1.1.1",
-    "xlsx": "^0.18.5"
+    "node-fetch": "2.6.7"
   }
 }
-
 
