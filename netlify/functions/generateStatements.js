@@ -1,10 +1,9 @@
 // netlify/functions/generateStatements.js
 // Accepts JSON { framework, companyName, notes, files:[{kind,name,mimeType,base64}] }
-// Sends a multimodal request (text + files) to Gemini using @google/genai.
+// Improved: clearer errors for invalid base64 and oversize uploads.
 
 import { GoogleGenAI, createUserContent, createPartFromBuffer } from "@google/genai";
 
-// ——— Helpers ———
 function json(statusCode, obj) {
   return {
     statusCode,
@@ -33,26 +32,30 @@ Output sections:
 `.trim();
 }
 
-const ALLOWED_MIME = new Set([
+const ALLOWED = new Set([
   "application/pdf",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 
+// Helper: infer mime from filename if browser didn’t set one
+function guessMime(name = "") {
+  const n = name.toLowerCase();
+  if (n.endsWith(".pdf")) return "application/pdf";
+  if (n.endsWith(".xls")) return "application/vnd.ms-excel";
+  if (n.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  return "";
+}
+
 export async function handler(event) {
   try {
-    if (event.httpMethod !== "POST") {
-      return json(405, { error: "Method Not Allowed" });
-    }
+    if (event.httpMethod !== "POST") return json(405, { error: "Method Not Allowed" });
 
-    // Env
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return json(500, { error: "Missing GEMINI_API_KEY" });
 
-    // Model (set in Netlify env if you like)
     const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
-    // Parse JSON
     let body = {};
     try {
       body = JSON.parse(event.body || "{}");
@@ -60,41 +63,66 @@ export async function handler(event) {
       return json(400, { error: "Invalid JSON body" });
     }
 
-    const {
-      framework = "IFRS",
-      companyName = "",
-      notes = "",
-      files = [],
-    } = body;
-
+    const { framework = "IFRS", companyName = "", notes = "", files = [] } = body;
     if (!Array.isArray(files)) return json(400, { error: "`files` must be an array" });
     if (files.length === 0) return json(400, { error: "Please include at least one file in base64" });
 
-    // Decode base64 files → Buffers → Gemini parts
+    // Netlify request size guard: if event.body is very large, it may be truncated silently.
+    // We can sanity-check base64 segments and sizes below.
     const parts = [];
-    for (const f of files) {
-      if (!f?.base64 || !f?.mimeType) continue;
+    let totalBytes = 0;
 
-      // Basic MIME allowlist
-      if (!ALLOWED_MIME.has(f.mimeType)) {
+    for (const f of files) {
+      if (!f) continue;
+      const name = f.name || "unnamed";
+      const mimeType = f.mimeType || guessMime(name);
+
+      if (!f.base64 || typeof f.base64 !== "string") {
+        return json(400, { error: `Missing base64 for file: ${name}` });
+      }
+
+      if (!mimeType || !ALLOWED.has(mimeType)) {
+        return json(400, { error: `Unsupported file type for ${name}: ${mimeType || "unknown"}. Upload PDF or Excel.` });
+      }
+
+      // Base64 sanitation (remove whitespace)
+      const b64 = f.base64.replace(/\s+/g, "");
+
+      // Quick integrity check: base64 length should be divisible by 4 (commonly true)
+      if (b64.length % 4 !== 0) {
         return json(400, {
-          error: `Unsupported MIME type: ${f.mimeType}. Upload PDF or Excel (.xls/.xlsx).`,
+          error: `The uploaded base64 for ${name} looks incomplete (length not multiple of 4).`,
+          details: "This often happens when the file is too large for a single request and got truncated by the server. Try a smaller file (≤ 8–9 MB) or split the PDF.",
         });
       }
-      // Decode
+
+      let buf;
       try {
-        const buf = Buffer.from(f.base64, "base64");
-        // 50 MB soft-check (you can adjust)
-        if (buf.length > 50 * 1024 * 1024) {
-          return json(400, {
-            error: `File too large: ${f.name || "unnamed"} (~${Math.round(buf.length / 1024 / 1024)} MB)`,
-          });
-        }
-        // Add as a multimodal part
-        parts.push(createPartFromBuffer(buf, f.mimeType));
-      } catch (e) {
-        return json(400, { error: `Failed to decode file: ${f?.name || "unnamed"}` });
+        buf = Buffer.from(b64, "base64");
+      } catch {
+        return json(400, {
+          error: `Failed to decode file: ${name}`,
+          details: "The base64 payload appears invalid or truncated. Try reselecting the file or using a smaller file.",
+        });
       }
+
+      // Another sanity check: decoded buffer should be non-empty
+      if (!buf || !buf.length) {
+        return json(400, { error: `Decoded file is empty: ${name}` });
+      }
+
+      totalBytes += buf.length;
+
+      // Soft limit (Netlify request size ~10 MB). If we reached here, base64 passed integrity check,
+      // but still warn if total payload likely exceeds typical limits.
+      if (totalBytes > 10 * 1024 * 1024) {
+        return json(400, {
+          error: `Total upload too large (~${Math.round(totalBytes / 1024 / 1024)} MB).`,
+          details: "Netlify Functions requests are limited (≈10 MB). Please compress your PDF, upload only key pages, or reduce file size.",
+        });
+      }
+
+      parts.push(createPartFromBuffer(buf, mimeType));
     }
 
     if (parts.length === 0) {
@@ -103,28 +131,23 @@ export async function handler(event) {
 
     const prompt = buildPrompt({ framework, companyName, notes });
 
-    // Call Gemini
     const genAI = new GoogleGenAI({ apiKey });
     const response = await genAI.models.generateContent({
       model: modelName,
       contents: [createUserContent([prompt, ...parts])],
     });
 
-    // Extract text
     const text = response?.text?.();
-    if (!text) {
-      return json(502, { error: "No text generated by Gemini", modelTried: modelName });
-    }
+    if (!text) return json(502, { error: "No text generated by Gemini", modelTried: modelName });
 
     return json(200, { output: text, model: modelName });
   } catch (err) {
     console.error("generateStatements error:", err);
-    return json(500, {
-      error: "Gemini request failed",
-      details: err?.message || String(err),
-    });
+    return json(500, { error: "Gemini request failed", details: err?.message || String(err) });
   }
 }
+
+
 
 
 
