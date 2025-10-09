@@ -1,11 +1,17 @@
+# netlify.toml — place this file at the ROOT of your repo
+
 [build]
   command = "npm install"
   publish = "."
 
+# Optional but recommended
+[build.environment]
+  NODE_VERSION = "20"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  # keep these external to avoid bundling issues
-  external_node_modules = ["pdf-parse", "multiparty", "xlsx", "node-fetch"]
-  # ⬇️ increase max execution time (Netlify will cap based on your plan)
+  # Keep some libs external to avoid bundling headaches
+  external_node_modules = ["@google/genai", "pdf-parse", "multiparty", "xlsx", "node-fetch"]
+  # Max allowed on most plans (actual cap depends on your plan)
   timeout = 26
