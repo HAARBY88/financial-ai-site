@@ -2,9 +2,8 @@
   "name": "financial-ai-site",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "dependencies": {
-    "@google/genai": "^0.8.0",
-    "node-fetch": "2.6.7"
+    "@google/genai": "^0.8.0"
   }
 }
-
