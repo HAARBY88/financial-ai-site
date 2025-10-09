@@ -1,3 +1,5 @@
+# netlify.toml (clean + minimal)
+
 [build]
   command = "npm install"
   publish = "."
@@ -9,4 +11,3 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
   external_node_modules = ["@google/genai"]
-  timeout = 26
