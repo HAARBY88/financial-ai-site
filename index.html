@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Financial AI – Draft Statements (PDF + Excel → Gemini)</title>
+  <title>Financial AI – Draft Statements (Gemini Multimodal)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --brand:#0b5bd3; --brand2:#0a4bb0; --bg:#f6f7fb; --card:#fff; --text:#222; --muted:#6b7280; --err:#b00020; }
+    :root { --brand:#0b5bd3; --brand2:#0948a9; --bg:#f6f7fb; --card:#fff; --text:#222; --muted:#6b7280; --err:#b00020; }
     * { box-sizing: border-box; }
     body { margin:0; padding:24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
     h1,h2,h3 { margin:0 0 12px; color:#0b335b; }
@@ -19,7 +19,7 @@
       width: 100%; padding: 10px 12px; border:1px solid #d6dae3; border-radius: 10px; background:#fff; font-size: 15px;
     }
     textarea { min-height: 100px; resize: vertical; }
-    .btn-row { display:flex; gap:10px; flex-wrap: wrap; }
+    .btn-row { display:flex; gap:10px; flex-wrap: wrap; margin-top: 8px; }
     button { appearance: none; border:0; background:var(--brand); color:#fff; padding: 10px 14px; border-radius: 10px; font-weight: 700; cursor:pointer; }
     button.secondary { background:#eef3ff; color:#0b335b; border:1px solid #d7e2ff; }
     button:hover { background:var(--brand2); }
@@ -37,9 +37,9 @@
 <body>
 <div class="wrap">
   <h1>Financial AI – Draft Financial Statements</h1>
-  <p class="muted">Upload your prior-year PDF and current-year trial balance (Excel). Pick IFRS or US GAAP, add any notes, and Gemini will draft the statements.</p>
+  <p class="muted">Upload last year’s PDF and this year’s trial balance (Excel). Choose the accounting framework and add notes. Click generate to produce a draft.</p>
 
-  <!-- Section 0: Context -->
+  <!-- Step 0: Context -->
   <div class="card">
     <div class="section-title">
       <h2 style="margin:0;">Step 0</h2><span class="pill">Context</span>
@@ -59,11 +59,11 @@
     </div>
     <div style="margin-top:12px;">
       <label for="notes">Notes / instructions (optional)</label>
-      <textarea id="notes" placeholder="Anything special to highlight, e.g., restatements, new standards adoption, one-offs, or sections to emphasize."></textarea>
+      <textarea id="notes" placeholder="Restatements, new standards, one-offs, sections to emphasise, etc."></textarea>
     </div>
   </div>
 
-  <!-- Section 1: Prior-year PDF -->
+  <!-- Step 1: Prior-year PDF -->
   <div class="card">
     <div class="section-title">
       <h2 style="margin:0;">Step 1</h2><span class="pill">Prior-year PDF</span>
@@ -72,13 +72,13 @@
       <div>
         <label for="priorPdf">Upload prior-year financial statements (PDF)</label>
         <input id="priorPdf" type="file" accept="application/pdf" />
-        <div class="hint">A clean PDF of last year’s statements helps the model mirror tone, headings and structure.</div>
+        <div class="hint">This helps the model mirror headings and tone. Optional, but recommended.</div>
       </div>
     </div>
-    <div id="priorStatus" class="muted" style="margin-top:10px;">(Optional) You can upload only the TB, but results are better with a prior-year PDF.</div>
+    <div id="priorStatus" class="muted" style="margin-top:10px;">No PDF selected.</div>
   </div>
 
-  <!-- Section 2: Trial balance (Excel) -->
+  <!-- Step 2: Trial balance (Excel) -->
   <div class="card">
     <div class="section-title">
       <h2 style="margin:0;">Step 2</h2><span class="pill">Current-year TB (Excel)</span>
@@ -86,21 +86,22 @@
     <div class="grid grid-2">
       <div>
         <label for="tbCurrent">Upload current-year trial balance (.xls / .xlsx)</label>
-        <input id="tbCurrent" type="file" accept=".xls,.xlsx" />
-        <div class="hint">A single sheet with account names + amounts works best. If multiple sheets, include the main one.</div>
+        <input id="tbCurrent" type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+        <div class="hint">A single sheet with account names + amounts works well.</div>
       </div>
     </div>
-    <div id="tbStatus" class="muted" style="margin-top:10px;">TB status will appear here…</div>
+    <div id="tbStatus" class="muted" style="margin-top:10px;">No TB selected.</div>
   </div>
 
-  <!-- Section 3: Generate -->
+  <!-- Step 3: Generate -->
   <div class="card">
     <div class="section-title">
       <h2 style="margin:0;">Step 3</h2><span class="pill">Generate</span>
     </div>
-    <div class="btn-row" style="margin-top:8px;">
+    <div class="btn-row">
       <button id="generateBtn">Generate Draft with Gemini</button>
-      <button id="clearBtn" class="secondary" type="button" title="Clears results only">Clear Results</button>
+      <button id="clearBtn" class="secondary" type="button">Clear Results</button>
+      <button id="previewBtn" class="secondary" type="button" title="Show what will be sent (no AI call)">Preview Payload</button>
     </div>
     <div id="aiOutput" class="muted" style="margin-top:12px;">Draft will appear here…</div>
   </div>
@@ -116,18 +117,20 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const frameworkEl = document.getElementById("framework");
-  const companyEl = document.getElementById("companyName");
-  const notesEl = document.getElementById("notes");
+  const companyEl   = document.getElementById("companyName");
+  const notesEl     = document.getElementById("notes");
 
-  const priorPdfEl = document.getElementById("priorPdf");
-  const tbEl = document.getElementById("tbCurrent");
+  const priorPdfEl  = document.getElementById("priorPdf");
+  const tbEl        = document.getElementById("tbCurrent");
 
   const priorStatus = document.getElementById("priorStatus");
-  const tbStatus = document.getElementById("tbStatus");
+  const tbStatus    = document.getElementById("tbStatus");
 
   const generateBtn = document.getElementById("generateBtn");
-  const clearBtn = document.getElementById("clearBtn");
-  const aiOutput = document.getElementById("aiOutput");
+  const clearBtn    = document.getElementById("clearBtn");
+  const previewBtn  = document.getElementById("previewBtn");
+
+  const aiOutput    = document.getElementById("aiOutput");
   const diagnostics = document.getElementById("diagnostics");
 
   function set(el, html, cls) {
@@ -136,81 +139,10 @@ document.addEventListener("DOMContentLoaded", () => {
     el.innerHTML = html;
   }
 
-  // Just show file info on selection (client-side)
-  priorPdfEl.addEventListener("change", () => {
-    const f = priorPdfEl.files?.[0];
-    if (!f) { set(priorStatus, "(Optional) You can upload only the TB, but results are better with a prior-year PDF.", "muted"); return; }
-    set(priorStatus, `📄 Selected: ${f.name} (${Math.round(f.size/1024)} KB)`, "muted");
-  });
-
-  tbEl.addEventListener("change", () => {
-    const f = tbEl.files?.[0];
-    if (!f) { set(tbStatus, "TB status will appear here…", "muted"); return; }
-    set(tbStatus, `📊 Selected: ${f.name} (${Math.round(f.size/1024)} KB)`, "muted");
-  });
-
-  clearBtn.addEventListener("click", () => {
-    set(aiOutput, "Draft will appear here…", "muted");
-    set(diagnostics, "No actions yet…", "muted");
-  });
-
-  generateBtn.addEventListener("click", async () => {
-    try {
-      const formData = new FormData();
-      formData.append("framework", frameworkEl?.value || "IFRS");
-      formData.append("companyName", companyEl?.value || "");
-      formData.append("notes", notesEl?.value || "");
-
-      const pdf = priorPdfEl.files?.[0];
-      const tb = tbEl.files?.[0];
-
-      if (pdf) formData.append("priorPdf", pdf);
-      if (tb) formData.append("tbCurrent", tb);
-
-      if (!pdf && !tb) {
-        set(aiOutput, "<span class='err'>⚠️ Please upload at least one file: a prior-year PDF and/or a current-year TB.</span>", "err");
-        return;
-      }
-
-      set(aiOutput, "⏳ Uploading and generating draft financial statements…", "loading");
-      set(diagnostics, "Calling /.netlify/functions/generateStatements …", "muted");
-
-      const res = await fetch("/.netlify/functions/generateStatements", { method: "POST", body: formData });
-      const raw = await res.text();
-      let data = {};
-      try { data = JSON.parse(raw); } catch (e) {}
-
-      if (!res.ok) {
-        const details = [
-          data.error && `Error: ${data.error}`,
-          data.details && `Details: ${data.details}`,
-          data.modelTried && `Model tried: ${data.modelTried}`,
-          data.endpoint && `Endpoint: ${data.endpoint}`,
-          data.responseBody && `Response body:\n${data.responseBody}`
-        ].filter(Boolean).join("\n");
-        set(aiOutput, `<pre class="err">❌ Generation failed.\n${details || raw || "No details returned."}</pre>`, "err");
-        set(diagnostics, `generateStatements error:\n${details || raw}`, "muted");
-        console.error("generateStatements failed:", raw);
-        return;
-      }
-
-      set(aiOutput, `<h3>✅ Draft Generated (${data.model || "model unknown"})</h3><pre>${data.output || "No output"}</pre>`);
-      set(diagnostics, `generateStatements OK (model: ${data.model || "unknown"})`, "muted");
-    } catch (err) {
-      set(aiOutput, `<span class="err">❌ ${err.message}</span>`, "err");
-      set(diagnostics, `generateStatements exception: ${err.message}`, "muted");
-      console.error("generateStatements exception:", err);
-    }
-  });
-});
-</script>
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const generateBtn = document.getElementById("generateBtn");
-  const aiOutput = document.getElementById("aiOutput");
-  const diagnostics = document.getElementById("diagnostics");
-
-  function set(el, html, cls) { if (el){ if (cls!==undefined) el.className = cls; el.innerHTML = html; } }
+  function bytesFromB64Len(b64Len) {
+    // approximate decoded bytes length
+    return Math.round((b64Len * 3) / 4);
+  }
 
   async function fileToBase64(inputEl) {
     const f = inputEl?.files?.[0];
@@ -219,7 +151,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const fr = new FileReader();
       fr.onerror = () => reject(new Error("Failed to read file"));
       fr.onload = () => {
-        // fr.result is "data:<mime>;base64,XXXX"
         const result = String(fr.result || "");
         const comma = result.indexOf(",");
         const base64 = comma >= 0 ? result.slice(comma + 1) : result;
@@ -229,30 +160,76 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  priorPdfEl.addEventListener("change", () => {
+    const f = priorPdfEl.files?.[0];
+    if (!f) { set(priorStatus, "No PDF selected.", "muted"); return; }
+    set(priorStatus, `📄 Selected: ${f.name} (${Math.round(f.size/1024)} KB)`, "muted");
+  });
+
+  tbEl.addEventListener("change", () => {
+    const f = tbEl.files?.[0];
+    if (!f) { set(tbStatus, "No TB selected.", "muted"); return; }
+    set(tbStatus, `📊 Selected: ${f.name} (${Math.round(f.size/1024)} KB)`, "muted");
+  });
+
+  clearBtn.addEventListener("click", () => {
+    set(aiOutput, "Draft will appear here…", "muted");
+    set(diagnostics, "No actions yet…", "muted");
+  });
+
+  async function buildPayload() {
+    const framework   = frameworkEl?.value || "IFRS";
+    const companyName = companyEl?.value || "";
+    const notes       = notesEl?.value || "";
+
+    const priorPdf = await fileToBase64(priorPdfEl);
+    const tbCurrent = await fileToBase64(tbEl);
+
+    const files = [];
+    if (priorPdf)  files.push({ kind: "priorPdf",  ...priorPdf });
+    if (tbCurrent) files.push({ kind: "tbCurrent", ...tbCurrent });
+
+    return { framework, companyName, notes, files };
+  }
+
+  previewBtn.addEventListener("click", async () => {
+    try {
+      const payload = await buildPayload();
+      const diag = {
+        framework: payload.framework,
+        companyName: payload.companyName,
+        notesLength: payload.notes.length,
+        files: payload.files.map(f => ({
+          kind: f.kind, name: f.name, mimeType: f.mimeType,
+          approxBytes: bytesFromB64Len(f.base64.length)
+        }))
+      };
+      set(diagnostics, "Preview of payload to be sent (no AI call):\n" + JSON.stringify(diag, null, 2), "muted");
+      set(aiOutput, "Preview created. Click Generate to call Gemini.", "muted");
+    } catch (err) {
+      set(diagnostics, "Preview failed: " + err.message, "err");
+    }
+  });
+
   generateBtn.addEventListener("click", async () => {
     try {
-      const framework = document.getElementById("framework")?.value || "IFRS";
-      const companyName = document.getElementById("companyName")?.value || "";
-      const notes = document.getElementById("notes")?.value || "";
+      const payload = await buildPayload();
 
-      const priorPdf = await fileToBase64(document.getElementById("priorPdf"));
-      const tbCurrent = await fileToBase64(document.getElementById("tbCurrent"));
-
-      if (!priorPdf && !tbCurrent) {
+      if (!payload.files.length) {
         set(aiOutput, "<span class='err'>⚠️ Please upload a prior-year PDF and/or a current-year TB (Excel).</span>", "err");
         return;
       }
 
-      const payload = { framework, companyName, notes, files: [] };
-      if (priorPdf) payload.files.push({ kind: "priorPdf", ...priorPdf });
-      if (tbCurrent) payload.files.push({ kind: "tbCurrent", ...tbCurrent });
-
-      set(diagnostics, "Sending JSON to generateStatements:\n" + JSON.stringify({
-        framework, companyName,
-        notesLength: notes.length,
-        files: payload.files.map(f => ({ kind: f.kind, name: f.name, mimeType: f.mimeType, bytes: Math.round((f.base64.length*3)/4) }))
-      }, null, 2), "muted");
-
+      const light = {
+        framework: payload.framework,
+        companyName: payload.companyName,
+        notesLength: payload.notes.length,
+        files: payload.files.map(f => ({
+          kind: f.kind, name: f.name, mimeType: f.mimeType,
+          approxBytes: bytesFromB64Len(f.base64.length)
+        }))
+      };
+      set(diagnostics, "Sending JSON to generateStatements:\n" + JSON.stringify(light, null, 2), "muted");
       set(aiOutput, "⏳ Uploading and generating draft financial statements…", "loading");
 
       const res = await fetch("/.netlify/functions/generateStatements", {
@@ -280,15 +257,14 @@ document.addEventListener("DOMContentLoaded", () => {
       set(aiOutput, `<h3>✅ Draft Generated (${data.model || "model unknown"})</h3><pre>${data.output || "No output"}</pre>`);
     } catch (err) {
       set(aiOutput, `<span class="err">❌ ${err.message}</span>`, "err");
+      set(diagnostics, `Exception: ${err.message}`, "muted");
+      console.error("Generate exception:", err);
     }
   });
 });
 </script>
-
 </body>
 </html>
-
-
 
 
 
