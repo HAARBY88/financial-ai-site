@@ -2,42 +2,49 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Financial AI Filing Analysis</title>
+  <title>Financial AI – Draft Statements (PDF + Excel → Gemini)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --brand:#004080; --brand2:#0066cc; --bg:#f4f6f8; --card:#fff; --text:#333; --muted:#777; --err:#b00020; }
-    body { font-family: Arial, sans-serif; max-width: 980px; margin: 0 auto; padding: 24px; background: var(--bg); color: var(--text); }
-    h1,h2,h3 { color: var(--brand); margin: 0 0 12px; }
-    .card { background: var(--card); border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.06); padding: 16px 18px; margin: 16px 0; }
-    .row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
-    .row > div { display: flex; flex-direction: column; gap: 8px; }
-    label { font-weight: 600; }
-    input[type="file"], input[type="text"], select, textarea {
-      padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #fff; width: 100%;
+    :root { --brand:#0b5bd3; --brand2:#0a4bb0; --bg:#f6f7fb; --card:#fff; --text:#222; --muted:#6b7280; --err:#b00020; }
+    * { box-sizing: border-box; }
+    body { margin:0; padding:24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+    h1,h2,h3 { margin:0 0 12px; color:#0b335b; }
+    p { margin: 6px 0 12px; }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    .card { background:var(--card); border:1px solid #e7e9f0; border-radius: 12px; padding: 18px; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+    .grid { display: grid; gap: 12px; }
+    @media (min-width: 720px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+    label { font-weight: 600; font-size: 14px; display:block; margin-bottom: 6px; color:#0b335b; }
+    input[type="text"], select, textarea, input[type="file"] {
+      width: 100%; padding: 10px 12px; border:1px solid #d6dae3; border-radius: 10px; background:#fff; font-size: 15px;
     }
-    textarea { min-height: 96px; resize: vertical; }
-    button { background: var(--brand); color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer; font-weight: 600; }
-    button:hover { background: var(--brand2); }
-    .muted { color: var(--muted); }
-    .loading { color: #555; }
-    .err { color: var(--err); white-space: pre-wrap; }
-    pre { background: #f7f7f7; border: 1px solid #eee; border-radius: 8px; padding: 12px; white-space: pre-wrap; overflow-x: auto; }
+    textarea { min-height: 100px; resize: vertical; }
+    .btn-row { display:flex; gap:10px; flex-wrap: wrap; }
+    button { appearance: none; border:0; background:var(--brand); color:#fff; padding: 10px 14px; border-radius: 10px; font-weight: 700; cursor:pointer; }
+    button.secondary { background:#eef3ff; color:#0b335b; border:1px solid #d7e2ff; }
+    button:hover { background:var(--brand2); }
+    button.secondary:hover { background:#e2ebff; }
+    .muted { color:var(--muted); }
+    .loading { color:#444; }
+    .err { color:var(--err); white-space: pre-wrap; }
+    pre { background:#fbfcff; border:1px solid #e7e9f0; padding:12px; border-radius:10px; overflow:auto; white-space: pre-wrap; }
+    .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+    .pill { display:inline-block; padding:4px 8px; background:#eef3ff; border:1px solid #d7e2ff; border-radius:999px; font-size:12px; color:#0b335b; margin-right:6px; }
+    .section-title { display:flex; align-items:center; gap:8px; }
     .footer-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
-    .kpis { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
-    .kpis div { background:#eef4ff; color:#123; padding:8px 10px; border-radius:8px; border:1px solid #d9e4ff; }
   </style>
 </head>
 <body>
-  <h1>Financial AI Filing Analysis</h1>
+<div class="wrap">
+  <h1>Financial AI – Draft Financial Statements</h1>
+  <p class="muted">Upload your prior-year PDF and current-year trial balance (Excel). Pick IFRS or US GAAP, add any notes, and Gemini will draft the statements.</p>
 
   <!-- Section 0: Context -->
   <div class="card">
-    <h2>0) Context</h2>
-    <div class="row">
-      <div>
-        <label for="companyName">Company name (optional)</label>
-        <input id="companyName" type="text" placeholder="e.g., Anglo London Limited" />
-      </div>
+    <div class="section-title">
+      <h2 style="margin:0;">Step 0</h2><span class="pill">Context</span>
+    </div>
+    <div class="grid grid-2">
       <div>
         <label for="framework">Accounting framework</label>
         <select id="framework">
@@ -45,358 +52,160 @@
           <option value="US GAAP">US GAAP</option>
         </select>
       </div>
+      <div>
+        <label for="companyName">Company name (optional)</label>
+        <input id="companyName" type="text" placeholder="e.g., Anglo London Limited" />
+      </div>
     </div>
-    <label for="notes" style="margin-top:10px;">Notes to the assistant (optional)</label>
-    <textarea id="notes" placeholder="Anything special to highlight, e.g., restatements, new standards adoption, one-offs…"></textarea>
+    <div style="margin-top:12px;">
+      <label for="notes">Notes / instructions (optional)</label>
+      <textarea id="notes" placeholder="Anything special to highlight, e.g., restatements, new standards adoption, one-offs, or sections to emphasize."></textarea>
+    </div>
   </div>
 
   <!-- Section 1: Prior-year PDF -->
   <div class="card">
-    <h2>1) Upload Prior-Year Financial Statements (PDF)</h2>
-    <div class="row">
+    <div class="section-title">
+      <h2 style="margin:0;">Step 1</h2><span class="pill">Prior-year PDF</span>
+    </div>
+    <div class="grid grid-2">
       <div>
-        <label for="priorPdf">Prior-year PDF</label>
+        <label for="priorPdf">Upload prior-year financial statements (PDF)</label>
         <input id="priorPdf" type="file" accept="application/pdf" />
-      </div>
-      <div style="align-self:end;">
-        <button id="btnExtractPrior">Extract Prior-Year Style</button>
+        <div class="hint">A clean PDF of last year’s statements helps the model mirror tone, headings and structure.</div>
       </div>
     </div>
-    <div id="priorPreview" class="muted">Preview will appear here…</div>
-    <div class="footer-note">We extract just enough text to capture tone, headings and structure.</div>
+    <div id="priorStatus" class="muted" style="margin-top:10px;">(Optional) You can upload only the TB, but results are better with a prior-year PDF.</div>
   </div>
 
-  <!-- Section 3: Trial balances (client-side parsing) -->
+  <!-- Section 2: Trial balance (Excel) -->
   <div class="card">
-    <h2>3) Upload Trial Balances (Excel/CSV)</h2>
-    <div class="row">
+    <div class="section-title">
+      <h2 style="margin:0;">Step 2</h2><span class="pill">Current-year TB (Excel)</span>
+    </div>
+    <div class="grid grid-2">
       <div>
-        <label for="tbPrior">Prior-year TB (.xlsx/.xls/.csv)</label>
-        <input id="tbPrior" type="file" accept=".xlsx,.xls,.csv" />
-      </div>
-      <div>
-        <label for="tbCurrent">Current-year TB (.xlsx/.xls/.csv)</label>
-        <input id="tbCurrent" type="file" accept=".xlsx,.xls,.csv" />
+        <label for="tbCurrent">Upload current-year trial balance (.xls / .xlsx)</label>
+        <input id="tbCurrent" type="file" accept=".xls,.xlsx" />
+        <div class="hint">A single sheet with account names + amounts works best. If multiple sheets, include the main one.</div>
       </div>
     </div>
-    <div style="margin-top:10px;">
-      <button id="btnReadTBs">Read Trial Balances (client-side)</button>
+    <div id="tbStatus" class="muted" style="margin-top:10px;">TB status will appear here…</div>
+  </div>
+
+  <!-- Section 3: Generate -->
+  <div class="card">
+    <div class="section-title">
+      <h2 style="margin:0;">Step 3</h2><span class="pill">Generate</span>
     </div>
-    <div id="tbOutput" class="muted" style="margin-top:10px;">TB check will appear here…</div>
-    <div class="kpis" id="tbKpis" style="display:none;"></div>
+    <div class="btn-row" style="margin-top:8px;">
+      <button id="generateBtn">Generate Draft with Gemini</button>
+      <button id="clearBtn" class="secondary" type="button" title="Clears results only">Clear Results</button>
+    </div>
+    <div id="aiOutput" class="muted" style="margin-top:12px;">Draft will appear here…</div>
   </div>
 
-  <!-- Section 4: Generate -->
+  <!-- Diagnostics -->
   <div class="card">
-    <h2>4) Generate Draft Statements</h2>
-    <button id="generateBtn">Generate Draft with Gemini</button>
-    <div id="aiOutput" class="muted" style="margin-top:10px;">Draft will appear here…</div>
-  </div>
-
-  <!-- Diagnostics (server/client debug) -->
-  <div class="card">
-    <h3>Diagnostics</h3>
+    <h3 style="margin-bottom:6px;">Diagnostics</h3>
     <pre id="diagnostics" class="muted">No actions yet…</pre>
+    <div class="footer-note">If something fails, details will be shown here.</div>
   </div>
+</div>
 
-  <!-- SheetJS for client-side Excel/CSV parsing -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const frameworkEl = document.getElementById("framework");
+  const companyEl = document.getElementById("companyName");
+  const notesEl = document.getElementById("notes");
 
-  <script>
-  (function () {
-    // ---------- Helpers ----------
-    const $ = (sel) => document.querySelector(sel);
-    const setHTML = (sel, html, cls) => {
-      const el = $(sel);
-      if (!el) return;
-      if (cls !== undefined) el.className = cls;
-      el.innerHTML = html;
-    };
+  const priorPdfEl = document.getElementById("priorPdf");
+  const tbEl = document.getElementById("tbCurrent");
 
-    function savePriorText(txt) { sessionStorage.setItem("priorText", txt || ""); }
-    function loadPriorText() { return sessionStorage.getItem("priorText") || ""; }
-    function saveTbParsed(obj) { sessionStorage.setItem("tbParsed", JSON.stringify(obj || {})); }
-    function loadTbParsed() {
-      const raw = sessionStorage.getItem("tbParsed") || "";
-      try { return raw ? JSON.parse(raw) : {}; } catch { return {}; }
-    }
+  const priorStatus = document.getElementById("priorStatus");
+  const tbStatus = document.getElementById("tbStatus");
 
-    function readAsArrayBuffer(file) {
-      return new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onerror = () => reject(new Error("Failed to read file"));
-        fr.onload = () => resolve(fr.result);
-        fr.readAsArrayBuffer(file);
-      });
-    }
-    function readAsText(file) {
-      return new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onerror = () => reject(new Error("Failed to read file"));
-        fr.onload = () => resolve(fr.result);
-        fr.readAsText(file);
-      });
-    }
-    function toBase64(file) {
-      return new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onerror = () => reject(new Error("Failed to read file"));
-        fr.onload = () => resolve(String(fr.result).split(",")[1] || "");
-        fr.readAsDataURL(file);
-      });
-    }
+  const generateBtn = document.getElementById("generateBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const aiOutput = document.getElementById("aiOutput");
+  const diagnostics = document.getElementById("diagnostics");
 
-    // CSV + XLSX parsing (client-side)
-    function parseCSVText(text) {
-      const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
-      if (!lines.length) return {};
-      const rows = lines.map(l => l.split(",").map(s => s.replace(/^"|"$/g, "").trim()));
-      // Heuristic: first col = name, find numeric-ish column for amount
-      let amtIdx = 1, bestScore = -1;
-      const maxCols = Math.min(5, rows[0]?.length || 0);
-      for (let c = 1; c < maxCols; c++) {
-        let score = 0;
-        for (let r = 1; r < rows.length; r++) {
-          const v = rows[r][c];
-          if (typeof v === "number") score++;
-          else if (typeof v === "string" && v && !isNaN(Number(v.replace(/[, ]/g, "")))) score++;
-        }
-        if (score > bestScore) { bestScore = score; amtIdx = c; }
+  function set(el, html, cls) {
+    if (!el) return;
+    if (cls !== undefined) el.className = cls;
+    el.innerHTML = html;
+  }
+
+  // Just show file info on selection (client-side)
+  priorPdfEl.addEventListener("change", () => {
+    const f = priorPdfEl.files?.[0];
+    if (!f) { set(priorStatus, "(Optional) You can upload only the TB, but results are better with a prior-year PDF.", "muted"); return; }
+    set(priorStatus, `📄 Selected: ${f.name} (${Math.round(f.size/1024)} KB)`, "muted");
+  });
+
+  tbEl.addEventListener("change", () => {
+    const f = tbEl.files?.[0];
+    if (!f) { set(tbStatus, "TB status will appear here…", "muted"); return; }
+    set(tbStatus, `📊 Selected: ${f.name} (${Math.round(f.size/1024)} KB)`, "muted");
+  });
+
+  clearBtn.addEventListener("click", () => {
+    set(aiOutput, "Draft will appear here…", "muted");
+    set(diagnostics, "No actions yet…", "muted");
+  });
+
+  generateBtn.addEventListener("click", async () => {
+    try {
+      const formData = new FormData();
+      formData.append("framework", frameworkEl?.value || "IFRS");
+      formData.append("companyName", companyEl?.value || "");
+      formData.append("notes", notesEl?.value || "");
+
+      const pdf = priorPdfEl.files?.[0];
+      const tb = tbEl.files?.[0];
+
+      if (pdf) formData.append("priorPdf", pdf);
+      if (tb) formData.append("tbCurrent", tb);
+
+      if (!pdf && !tb) {
+        set(aiOutput, "<span class='err'>⚠️ Please upload at least one file: a prior-year PDF and/or a current-year TB.</span>", "err");
+        return;
       }
-      const out = {};
-      for (let r = 1; r < rows.length; r++) {
-        const name = (rows[r][0] || "").toString().trim();
-        if (!name) continue;
-        let val = rows[r][amtIdx];
-        if (typeof val === "string") val = Number(val.replace(/[, ]/g, ""));
-        if (typeof val !== "number" || isNaN(val)) continue;
-        out[name] = (out[name] || 0) + val;
+
+      set(aiOutput, "⏳ Uploading and generating draft financial statements…", "loading");
+      set(diagnostics, "Calling /.netlify/functions/generateStatements …", "muted");
+
+      const res = await fetch("/.netlify/functions/generateStatements", { method: "POST", body: formData });
+      const raw = await res.text();
+      let data = {};
+      try { data = JSON.parse(raw); } catch (e) {}
+
+      if (!res.ok) {
+        const details = [
+          data.error && `Error: ${data.error}`,
+          data.details && `Details: ${data.details}`,
+          data.modelTried && `Model tried: ${data.modelTried}`,
+          data.endpoint && `Endpoint: ${data.endpoint}`,
+          data.responseBody && `Response body:\n${data.responseBody}`
+        ].filter(Boolean).join("\n");
+        set(aiOutput, `<pre class="err">❌ Generation failed.\n${details || raw || "No details returned."}</pre>`, "err");
+        set(diagnostics, `generateStatements error:\n${details || raw}`, "muted");
+        console.error("generateStatements failed:", raw);
+        return;
       }
-      return out;
+
+      set(aiOutput, `<h3>✅ Draft Generated (${data.model || "model unknown"})</h3><pre>${data.output || "No output"}</pre>`);
+      set(diagnostics, `generateStatements OK (model: ${data.model || "unknown"})`, "muted");
+    } catch (err) {
+      set(aiOutput, `<span class="err">❌ ${err.message}</span>`, "err");
+      set(diagnostics, `generateStatements exception: ${err.message}`, "muted");
+      console.error("generateStatements exception:", err);
     }
-
-    function parseWorkbook(ab) {
-      const wb = XLSX.read(ab, { type: "array" });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
-      if (!rows || !rows.length) return {};
-      let amtIdx = 1, bestScore = -1;
-      const maxCols = Math.min(5, rows[0].length);
-      for (let c = 1; c < maxCols; c++) {
-        let score = 0;
-        for (let r = 1; r < rows.length; r++) {
-          const v = rows[r][c];
-          if (typeof v === "number") score++;
-          else if (typeof v === "string" && v && !isNaN(Number(v.replace(/[, ]/g, "")))) score++;
-        }
-        if (score > bestScore) { bestScore = score; amtIdx = c; }
-      }
-      const out = {};
-      for (let r = 1; r < rows.length; r++) {
-        const name = (rows[r][0] ?? "").toString().trim();
-        if (!name) continue;
-        let val = rows[r][amtIdx];
-        if (typeof val === "string") val = Number(val.replace(/[, ]/g, ""));
-        if (typeof val !== "number" || isNaN(val)) continue;
-        out[name] = (out[name] || 0) + val;
-      }
-      return out;
-    }
-
-    async function parseTBFile(file) {
-      const lower = (file.name || "").toLowerCase();
-      if (lower.endsWith(".csv")) {
-        const text = await readAsText(file);
-        return parseCSVText(text);
-      }
-      const ab = await readAsArrayBuffer(file);
-      return parseWorkbook(ab);
-    }
-
-    // ---------- Wire up UI ----------
-    const priorPdf = $("#priorPdf");
-    const btnExtractPrior = $("#btnExtractPrior");
-    const priorPreview = $("#priorPreview");
-
-    const tbPrior = $("#tbPrior");
-    const tbCurrent = $("#tbCurrent");
-    const btnReadTBs = $("#btnReadTBs");
-    const tbOutput = $("#tbOutput");
-    const tbKpis = $("#tbKpis");
-
-    const framework = $("#framework");
-    const companyName = $("#companyName");
-    const notes = $("#notes");
-    const btnGenerate = $("#generateBtn");
-    const aiOutput = $("#aiOutput");
-    const diagnostics = $("#diagnostics");
-
-    // On load: show cached state
-    const cachedPrior = loadPriorText();
-    if (cachedPrior) {
-      setHTML("#priorPreview", `<strong>Extracted preview (cached, first 600 chars):</strong><br><pre>${cachedPrior.slice(0,600)}</pre>`);
-    }
-    const cachedTB = loadTbParsed();
-    if (cachedTB?.prior && cachedTB?.current) {
-      setHTML("#tbOutput", `<strong>Cached TB:</strong> prior=${Object.keys(cachedTB.prior).length} lines, current=${Object.keys(cachedTB.current).length} lines`);
-      tbKpis.style.display = "flex";
-      tbKpis.innerHTML = `
-        <div>Total prior: ${Number(cachedTB.totals?.prior||0).toLocaleString()}</div>
-        <div>Total current: ${Number(cachedTB.totals?.current||0).toLocaleString()}</div>
-        <div>Δ: ${(Number(cachedTB.totals?.current||0)-Number(cachedTB.totals?.prior||0)).toLocaleString()}</div>
-      `;
-    }
-
-    // Section 1: extract prior PDF (calls Netlify function)
-    btnExtractPrior.addEventListener("click", async () => {
-      try {
-        if (!priorPdf.files?.[0]) {
-          setHTML("#priorPreview", "⚠️ Please choose a prior-year PDF first.", "err");
-          return;
-        }
-        setHTML("#priorPreview", "⏳ Reading PDF…", "loading");
-        const base64 = await toBase64(priorPdf.files[0]);
-        setHTML("#priorPreview", "⏳ Extracting text from PDF…", "loading");
-
-        const res = await fetch("/.netlify/functions/extractPriorPdf", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ priorPdfBase64: base64 })
-        });
-
-        const raw = await res.text();
-        let data = {};
-        try { data = JSON.parse(raw); } catch {}
-
-        if (!res.ok) {
-          const msg = [
-            data.error && `Error: ${data.error}`,
-            data.details && `Details: ${data.details}`
-          ].filter(Boolean).join("\n");
-          setHTML("#priorPreview", `<span class="err">❌ Extract failed.\n${msg || raw || "No details returned."}</span>`, "err");
-          diagnostics.textContent = `extractPriorPdf error:\n${msg || raw}`;
-          console.error("extractPriorPdf failed:", raw);
-          return;
-        }
-        if (!data.text) {
-          setHTML("#priorPreview", `<span class="err">❌ No text extracted from PDF.</span>`, "err");
-          diagnostics.textContent = "extractPriorPdf: empty text";
-          return;
-        }
-        savePriorText(data.text);
-        setHTML("#priorPreview", `<strong>Extracted preview (first 600 chars):</strong><br><pre>${data.text.slice(0,600)}</pre>`);
-        diagnostics.textContent = "extractPriorPdf OK";
-      } catch (err) {
-        console.error("extractPriorPdf exception:", err);
-        setHTML("#priorPreview", `<span class="err">❌ ${err.message}</span>`, "err");
-        diagnostics.textContent = `extractPriorPdf exception: ${err.message}`;
-      }
-    });
-
-    // Section 3: read TBs client-side (no server call)
-    btnReadTBs.addEventListener("click", async () => {
-      try {
-        if (!tbPrior.files?.[0] || !tbCurrent.files?.[0]) {
-          setHTML("#tbOutput", "⚠️ Please choose both the prior and current TB files.", "err");
-          return;
-        }
-        setHTML("#tbOutput", "⏳ Reading trial balances (client-side)…", "loading");
-        const prior = await parseTBFile(tbPrior.files[0]);
-        const current = await parseTBFile(tbCurrent.files[0]);
-        const totalPrior = Object.values(prior).reduce((a, b) => a + b, 0);
-        const totalCurrent = Object.values(current).reduce((a, b) => a + b, 0);
-        const tbParsed = { prior, current, totals: { prior: totalPrior, current: totalCurrent } };
-        saveTbParsed(tbParsed);
-        const sample = {
-          samplePrior: Object.entries(prior).slice(0, 5),
-          sampleCurrent: Object.entries(current).slice(0, 5)
-        };
-        setHTML("#tbOutput",
-          `<strong>Parsed (client-side):</strong> prior=${Object.keys(prior).length} lines, current=${Object.keys(current).length} lines<br>` +
-          `<strong>Totals:</strong> prior=${totalPrior.toLocaleString()}, current=${totalCurrent.toLocaleString()}<br>` +
-          `<pre>${JSON.stringify(sample, null, 2)}</pre>`
-        );
-        tbKpis.style.display = "flex";
-        tbKpis.innerHTML = `
-          <div>Total prior: ${totalPrior.toLocaleString()}</div>
-          <div>Total current: ${totalCurrent.toLocaleString()}</div>
-          <div>Δ: ${(totalCurrent-totalPrior).toLocaleString()}</div>
-        `;
-      } catch (err) {
-        console.error("Client TB parse error:", err);
-        setHTML("#tbOutput", `<span class="err">❌ ${err.message}</span>`, "err");
-      }
-    });
-
-    // Section 4: generate draft with Gemini — with rich error display
-    btnGenerate.addEventListener("click", async () => {
-      try {
-        const priorText = loadPriorText();
-        const tbParsed = loadTbParsed();
-        const errs = [];
-        if (!priorText) errs.push("• Upload & extract the prior-year PDF (Section 1).");
-        if (!tbParsed || !tbParsed.prior || !tbParsed.current) errs.push("• Upload & read both TB files (Section 3).");
-        if (errs.length) {
-          setHTML("#aiOutput", `<span class="err">Please complete these steps first:\n${errs.join("\n")}</span>`, "err");
-          diagnostics.textContent = "generateStatements blocked: missing inputs";
-          return;
-        }
-        setHTML("#aiOutput", "⏳ Generating draft with Gemini…", "loading");
-
-        const payload = {
-          framework: framework?.value || "IFRS",
-          companyName: companyName?.value || "",
-          notes: notes?.value || "",
-          priorText,
-          tbParsed
-        };
-
-        const res = await fetch("/.netlify/functions/generateStatements", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        const raw = await res.text();
-        let data = {};
-        try { data = JSON.parse(raw); } catch {}
-
-        if (!res.ok) {
-          // 🔎 Show everything we have from the function
-          const details = [
-            data.error && `Error: ${data.error}`,
-            data.details && `Details: ${data.details}`,
-            data.modelTried && `Model tried: ${data.modelTried}`,
-            data.endpoint && `Endpoint: ${data.endpoint}`,
-            data.modelsAvailable && `Available: ${Array.isArray(data.modelsAvailable)? data.modelsAvailable.join(", ") : data.modelsAvailable}`,
-            data.responseBody && `Response body:\n${data.responseBody}`
-          ].filter(Boolean).join("\n");
-
-          setHTML("#aiOutput", `<pre class="err">❌ Generation failed.\n${details || raw || "No details returned."}</pre>`, "err");
-          diagnostics.textContent = `generateStatements error:\n${details || raw}`;
-          console.error("generateStatements failed:", raw);
-          return;
-        }
-
-        setHTML("#aiOutput", `<pre>${data.output || "No output"}\n\n(Using model: ${data.model || "unknown"})</pre>`);
-        diagnostics.textContent = `generateStatements OK (model: ${data.model || "unknown"})`;
-      } catch (err) {
-        console.error("generateStatements exception:", err);
-        setHTML("#aiOutput", `<span class="err">❌ ${err.message}</span>`, "err");
-        diagnostics.textContent = `generateStatements exception: ${err.message}`;
-      }
-    });
-
-    // Global JS error catcher
-    window.addEventListener("error", (e) => console.error("Global JS error:", e.message));
-  })();
-  </script>
+  });
+});
+</script>
 </body>
 </html>
-
-
-
-
 
 
 
