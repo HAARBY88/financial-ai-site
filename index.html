@@ -204,8 +204,90 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 </script>
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const generateBtn = document.getElementById("generateBtn");
+  const aiOutput = document.getElementById("aiOutput");
+  const diagnostics = document.getElementById("diagnostics");
+
+  function set(el, html, cls) { if (el){ if (cls!==undefined) el.className = cls; el.innerHTML = html; } }
+
+  async function fileToBase64(inputEl) {
+    const f = inputEl?.files?.[0];
+    if (!f) return null;
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onerror = () => reject(new Error("Failed to read file"));
+      fr.onload = () => {
+        // fr.result is "data:<mime>;base64,XXXX"
+        const result = String(fr.result || "");
+        const comma = result.indexOf(",");
+        const base64 = comma >= 0 ? result.slice(comma + 1) : result;
+        resolve({ name: f.name, mimeType: f.type || "", base64 });
+      };
+      fr.readAsDataURL(f);
+    });
+  }
+
+  generateBtn.addEventListener("click", async () => {
+    try {
+      const framework = document.getElementById("framework")?.value || "IFRS";
+      const companyName = document.getElementById("companyName")?.value || "";
+      const notes = document.getElementById("notes")?.value || "";
+
+      const priorPdf = await fileToBase64(document.getElementById("priorPdf"));
+      const tbCurrent = await fileToBase64(document.getElementById("tbCurrent"));
+
+      if (!priorPdf && !tbCurrent) {
+        set(aiOutput, "<span class='err'>⚠️ Please upload a prior-year PDF and/or a current-year TB (Excel).</span>", "err");
+        return;
+      }
+
+      const payload = { framework, companyName, notes, files: [] };
+      if (priorPdf) payload.files.push({ kind: "priorPdf", ...priorPdf });
+      if (tbCurrent) payload.files.push({ kind: "tbCurrent", ...tbCurrent });
+
+      set(diagnostics, "Sending JSON to generateStatements:\n" + JSON.stringify({
+        framework, companyName,
+        notesLength: notes.length,
+        files: payload.files.map(f => ({ kind: f.kind, name: f.name, mimeType: f.mimeType, bytes: Math.round((f.base64.length*3)/4) }))
+      }, null, 2), "muted");
+
+      set(aiOutput, "⏳ Uploading and generating draft financial statements…", "loading");
+
+      const res = await fetch("/.netlify/functions/generateStatements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const raw = await res.text();
+      let data = {};
+      try { data = JSON.parse(raw); } catch {}
+
+      if (!res.ok) {
+        const details = [
+          data.error && `Error: ${data.error}`,
+          data.details && `Details: ${data.details}`,
+          data.modelTried && `Model tried: ${data.modelTried}`,
+          data.endpoint && `Endpoint: ${data.endpoint}`,
+          data.responseBody && `Response body:\n${data.responseBody}`
+        ].filter(Boolean).join("\n");
+        set(aiOutput, `<pre class="err">❌ Generation failed.\n${details || raw || "No details returned."}</pre>`, "err");
+        return;
+      }
+
+      set(aiOutput, `<h3>✅ Draft Generated (${data.model || "model unknown"})</h3><pre>${data.output || "No output"}</pre>`);
+    } catch (err) {
+      set(aiOutput, `<span class="err">❌ ${err.message}</span>`, "err");
+    }
+  });
+});
+</script>
+
 </body>
 </html>
+
 
 
 
