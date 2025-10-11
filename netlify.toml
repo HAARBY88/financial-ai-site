@@ -1,5 +1,3 @@
-# netlify.toml (clean + minimal)
-
 [build]
   command = "npm install"
   publish = "."
@@ -10,4 +8,7 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  external_node_modules = ["@google/genai"]
+  external_node_modules = ["@google/genai", "xlsx"]
+
+[functions."generateStatements"]
+  timeout = 26
