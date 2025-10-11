@@ -1,9 +1,11 @@
 // netlify/functions/generateStatements.js
-// Accepts JSON { framework, companyName, notes, files:[{kind,name,mimeType,base64}] }
-// Sends a multimodal request (text + base64 files) to Gemini using @google/genai.
-// NOTE: We DO NOT decode base64. We pass it via inlineData to Gemini.
+// Accepts JSON { framework, companyName, notes, files:[{kind,name,mimeType,base64}] }.
+// - PDF: passed as inlineData (base64) to Gemini
+// - Excel (.xls/.xlsx): converted to CSV text and sent as a text part
+// Requires env: GEMINI_API_KEY, optional: GEMINI_MODEL (default gemini-2.5-flash)
 
 import { GoogleGenAI } from "@google/genai";
+import XLSX from "xlsx";
 
 function json(statusCode, obj) {
   return {
@@ -16,7 +18,7 @@ function json(statusCode, obj) {
 function buildPrompt({ framework, companyName, notes }) {
   return `
 You are an expert ${framework} financial reporting assistant.
-Using the uploaded documents (prior-year PDF and/or current-year trial balance in Excel),
+Using the uploaded materials (prior-year PDF and/or current-year trial balance in CSV text),
 generate a professional draft of the current-year financial statements for "${companyName || "the company"}".
 Reflect the structure and tone of the prior report when present. Map amounts from the trial balance where possible.
 Clearly flag any missing disclosures required by ${framework}.
@@ -33,16 +35,16 @@ Output sections:
 `.trim();
 }
 
-const ALLOWED = new Set([
-  "application/pdf",
+// Supported direct uploads (PDF only). Excel is handled via CSV conversion.
+const PDF_MIME = "application/pdf";
+const EXCEL_MIMES = new Set([
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 
-// Guess mime if browser didn’t set one
 function guessMime(name = "") {
   const n = name.toLowerCase();
-  if (n.endsWith(".pdf")) return "application/pdf";
+  if (n.endsWith(".pdf")) return PDF_MIME;
   if (n.endsWith(".xls")) return "application/vnd.ms-excel";
   if (n.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   return "";
@@ -65,12 +67,12 @@ export async function handler(event) {
     }
 
     const { framework = "IFRS", companyName = "", notes = "", files = [] } = body;
-
     if (!Array.isArray(files)) return json(400, { error: "`files` must be an array" });
     if (files.length === 0) return json(400, { error: "Please include at least one file in base64" });
 
-    // Validate & size-check base64 files (do not decode)
-    const inlineParts = [];
+    // Build Gemini "contents": one user message with a prompt + parts for PDF inlineData and TB CSV text
+    const parts = [{ text: buildPrompt({ framework, companyName, notes }) }];
+
     let totalApproxBytes = 0;
 
     for (const f of files) {
@@ -80,48 +82,63 @@ export async function handler(event) {
       const base64 = typeof f.base64 === "string" ? f.base64.replace(/\s+/g, "") : "";
 
       if (!base64) return json(400, { error: `Missing base64 for file: ${name}` });
-      if (!mimeType || !ALLOWED.has(mimeType)) {
-        return json(400, { error: `Unsupported file type for ${name}: ${mimeType || "unknown"}. Upload PDF or Excel.` });
-      }
-      // Quick integrity check: base64 length often divisible by 4
-      if (base64.length % 4 !== 0) {
-        return json(400, {
-          error: `The uploaded base64 for ${name} looks incomplete (length not multiple of 4).`,
-          details: "This often happens when the file is too large for a single request and got truncated by the server. Try a smaller file (≤ 8–9 MB) or split the PDF.",
-        });
-      }
-
-      // Approx decoded size
+      // Approx decoded size (avoid oversized requests)
       const approxBytes = Math.round((base64.length * 3) / 4);
       totalApproxBytes += approxBytes;
-
       if (totalApproxBytes > 10 * 1024 * 1024) {
         return json(400, {
           error: `Total upload too large (~${(totalApproxBytes/1024/1024).toFixed(2)} MB).`,
-          details: "Netlify Functions requests are limited (≈10 MB). Please compress your PDF, upload only key pages, or reduce file size.",
+          details: "Netlify Functions requests are limited (≈10 MB). Please compress your PDF or reduce file size.",
         });
       }
 
-      inlineParts.push({
-        inlineData: { mimeType, data: base64 }
-      });
-    }
+      if (mimeType === PDF_MIME) {
+        // ✅ Pass PDF as inlineData
+        parts.push({
+          inlineData: { mimeType, data: base64 }
+        });
+      } else if (EXCEL_MIMES.has(mimeType)) {
+        // ✅ Convert Excel → CSV text and attach as a text part
+        // Decode base64 into a Buffer so XLSX can parse it
+        let buf;
+        try {
+          buf = Buffer.from(base64, "base64");
+        } catch {
+          return json(400, { error: `Failed to decode Excel file: ${name}` });
+        }
 
-    if (inlineParts.length === 0) {
-      return json(400, { error: "No valid files after validation (PDF/Excel only)." });
-    }
+        // Read workbook and convert the first sheet to CSV
+        let csvText = "";
+        try {
+          const wb = XLSX.read(buf, { type: "buffer" });
+          const firstSheetName = wb.SheetNames[0];
+          if (!firstSheetName) return json(400, { error: `No sheets found in workbook: ${name}` });
+          const ws = wb.Sheets[firstSheetName];
+          csvText = XLSX.utils.sheet_to_csv(ws);
 
-    const prompt = buildPrompt({ framework, companyName, notes });
+          if (!csvText.trim()) {
+            return json(400, { error: `Empty or unreadable sheet in workbook: ${name}` });
+          }
+        } catch (e) {
+          return json(400, { error: `Failed to parse Excel: ${name}`, details: e?.message || String(e) });
+        }
+
+        // Add as a text part (Gemini-friendly)
+        parts.push({
+          text:
+`TRIAL BALANCE CSV (${name}):
+${csvText}`
+        });
+      } else {
+        // Unsupported file types are ignored with a gentle message
+        return json(400, {
+          error: `Unsupported file type for ${name}: ${mimeType || "unknown"}. Upload PDF or Excel (.xls/.xlsx).`
+        });
+      }
+    }
 
     const genAI = new GoogleGenAI({ apiKey });
-    // Build contents manually (no createPartFromBuffer)
-    const contents = [{
-      role: "user",
-      parts: [
-        { text: prompt },
-        ...inlineParts
-      ]
-    }];
+    const contents = [{ role: "user", parts }];
 
     const response = await genAI.models.generateContent({ model: modelName, contents });
     const text = response?.text?.();
@@ -133,6 +150,7 @@ export async function handler(event) {
     return json(500, { error: "Gemini request failed", details: err?.message || String(err) });
   }
 }
+
 
 
 
