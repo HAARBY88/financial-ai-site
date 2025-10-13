@@ -2,269 +2,325 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Financial AI – Draft Statements (Gemini Multimodal)</title>
+  <title>Financial AI – Draft Statements</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --brand:#0b5bd3; --brand2:#0948a9; --bg:#f6f7fb; --card:#fff; --text:#222; --muted:#6b7280; --err:#b00020; }
-    * { box-sizing: border-box; }
-    body { margin:0; padding:24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
-    h1,h2,h3 { margin:0 0 12px; color:#0b335b; }
-    p { margin: 6px 0 12px; }
-    .wrap { max-width: 980px; margin: 0 auto; }
-    .card { background:var(--card); border:1px solid #e7e9f0; border-radius: 12px; padding: 18px; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
-    .grid { display: grid; gap: 12px; }
-    @media (min-width: 720px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
-    label { font-weight: 600; font-size: 14px; display:block; margin-bottom: 6px; color:#0b335b; }
-    input[type="text"], select, textarea, input[type="file"] {
-      width: 100%; padding: 10px 12px; border:1px solid #d6dae3; border-radius: 10px; background:#fff; font-size: 15px;
+    :root {
+      --blue: #004080;
+      --blue2: #0a66c2;
+      --bg: #f4f6f8;
+      --card: #fff;
+      --danger: #b00020;
+      --muted: #666;
     }
-    textarea { min-height: 100px; resize: vertical; }
-    .btn-row { display:flex; gap:10px; flex-wrap: wrap; margin-top: 8px; }
-    button { appearance: none; border:0; background:var(--brand); color:#fff; padding: 10px 14px; border-radius: 10px; font-weight: 700; cursor:pointer; }
-    button.secondary { background:#eef3ff; color:#0b335b; border:1px solid #d7e2ff; }
-    button:hover { background:var(--brand2); }
-    button.secondary:hover { background:#e2ebff; }
-    .muted { color:var(--muted); }
-    .loading { color:#444; }
-    .err { color:var(--err); white-space: pre-wrap; }
-    pre { background:#fbfcff; border:1px solid #e7e9f0; padding:12px; border-radius:10px; overflow:auto; white-space: pre-wrap; }
-    .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
-    .pill { display:inline-block; padding:4px 8px; background:#eef3ff; border:1px solid #d7e2ff; border-radius:999px; font-size:12px; color:#0b335b; margin-right:6px; }
-    .section-title { display:flex; align-items:center; gap:8px; }
-    .footer-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: #333;
+      margin: 0;
+      padding: 24px;
+    }
+    h1,h2,h3 { color: var(--blue); margin: 0 0 8px; }
+    .container { max-width: 980px; margin: 0 auto; }
+    .card {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+      margin: 14px 0;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .row-1 { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    label { font-weight: 600; display: block; margin-bottom: 6px; }
+    input[type="text"], select, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #d3d6db;
+      font-size: 14px;
+      background: #fff;
+    }
+    input[type="file"] {
+      width: 100%;
+    }
+    textarea { min-height: 100px; }
+    .btn {
+      display: inline-block;
+      background: var(--blue);
+      color: #fff;
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--blue2); }
+    .muted { color: var(--muted); font-size: 13px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    pre {
+      background: #f1f3f5;
+      border-radius: 8px;
+      padding: 12px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+    .error {
+      color: var(--danger);
+      font-weight: 600;
+    }
+    .flex-between {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; flex-wrap: wrap;
+    }
+    .pill {
+      display: inline-block;
+      background: #eef3ff;
+      color: #1d3a8a;
+      border: 1px solid #c7d6ff;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+    .small { font-size: 12px; }
   </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Financial AI – Draft Financial Statements</h1>
-  <p class="muted">Upload last year’s PDF and this year’s trial balance (Excel). Choose the accounting framework and add notes. Click generate to produce a draft.</p>
+  <div class="container">
+    <h1>Financial AI – Draft Statements</h1>
 
-  <!-- Step 0: Context -->
-  <div class="card">
-    <div class="section-title">
-      <h2 style="margin:0;">Step 0</h2><span class="pill">Context</span>
-    </div>
-    <div class="grid grid-2">
-      <div>
-        <label for="framework">Accounting framework</label>
-        <select id="framework">
-          <option value="IFRS" selected>IFRS</option>
-          <option value="US GAAP">US GAAP</option>
-        </select>
+    <!-- 1) Company & framework -->
+    <div class="card">
+      <h2>Company & Framework</h2>
+      <div class="row">
+        <div>
+          <label for="companyName">Company name</label>
+          <input id="companyName" type="text" placeholder="e.g. ABC Ltd" />
+        </div>
+        <div>
+          <label for="framework">Accounting framework</label>
+          <select id="framework">
+            <option value="IFRS" selected>IFRS</option>
+            <option value="US GAAP">US GAAP</option>
+          </select>
+        </div>
       </div>
-      <div>
-        <label for="companyName">Company name (optional)</label>
-        <input id="companyName" type="text" placeholder="e.g., Anglo London Limited" />
+      <div class="row-1" style="margin-top:12px">
+        <div>
+          <label for="notes">Additional notes (optional)</label>
+          <textarea id="notes" placeholder="Anything important for this year (transactions, policies, restatements, etc.)"></textarea>
+        </div>
       </div>
+      <p class="muted">Tip: Keep uploads under ~9–10 MB in total. PDFs and images are read directly; Excel is converted to CSV text.</p>
     </div>
-    <div style="margin-top:12px;">
-      <label for="notes">Notes / instructions (optional)</label>
-      <textarea id="notes" placeholder="Restatements, new standards, one-offs, sections to emphasise, etc."></textarea>
-    </div>
-  </div>
 
-  <!-- Step 1: Prior-year PDF -->
-  <div class="card">
-    <div class="section-title">
-      <h2 style="margin:0;">Step 1</h2><span class="pill">Prior-year PDF</span>
-    </div>
-    <div class="grid grid-2">
-      <div>
-        <label for="priorPdf">Upload prior-year financial statements (PDF)</label>
-        <input id="priorPdf" type="file" accept="application/pdf" />
-        <div class="hint">This helps the model mirror headings and tone. Optional, but recommended.</div>
-      </div>
-    </div>
-    <div id="priorStatus" class="muted" style="margin-top:10px;">No PDF selected.</div>
-  </div>
-
-  <!-- Step 2: Trial balance (Excel) -->
-  <div class="card">
-    <div class="section-title">
-      <h2 style="margin:0;">Step 2</h2><span class="pill">Current-year TB (Excel)</span>
-    </div>
-    <div class="grid grid-2">
-      <div>
-        <label for="tbCurrent">Upload current-year trial balance (.xls / .xlsx)</label>
-        <input id="tbCurrent" type="file" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
-        <div class="hint">A single sheet with account names + amounts works well.</div>
+    <!-- 2) Uploads -->
+    <div class="card">
+      <h2>Uploads</h2>
+      <div class="row">
+        <div>
+          <label for="priorFiles">Prior-year report (PDF or images)</label>
+          <input id="priorFiles" type="file" accept=".pdf,.png,.jpg,.jpeg" multiple />
+          <p class="small muted">You can upload one PDF or several images (e.g., scans of statements).</p>
+        </div>
+        <div>
+          <label for="tbCurrent">Current-year trial balance (Excel)</label>
+          <input id="tbCurrent" type="file" accept=".xls,.xlsx" />
+          <p class="small muted">We’ll convert this to CSV text before sending to AI.</p>
+        </div>
       </div>
     </div>
-    <div id="tbStatus" class="muted" style="margin-top:10px;">No TB selected.</div>
-  </div>
 
-  <!-- Step 3: Generate -->
-  <div class="card">
-    <div class="section-title">
-      <h2 style="margin:0;">Step 3</h2><span class="pill">Generate</span>
+    <!-- 3) Diagnostics -->
+    <div class="card">
+      <div class="flex-between">
+        <h2>Diagnostics</h2>
+        <span class="pill" id="diagStatus">Idle</span>
+      </div>
+      <div id="diagBody" class="muted">Click “Generate Draft Statements” to see what we’ll send.</div>
     </div>
-    <div class="btn-row">
-      <button id="generateBtn">Generate Draft with Gemini</button>
-      <button id="clearBtn" class="secondary" type="button">Clear Results</button>
-      <button id="previewBtn" class="secondary" type="button" title="Show what will be sent (no AI call)">Preview Payload</button>
+
+    <!-- 4) Generate -->
+    <div class="card">
+      <div class="flex-between">
+        <h2>Generate Draft Statements</h2>
+        <button id="btnGenerate" class="btn">Generate Draft Statements</button>
+      </div>
+      <div id="aiOutput" style="margin-top: 10px;">
+        <span class="muted">AI output will appear here…</span>
+      </div>
     </div>
-    <div id="aiOutput" class="muted" style="margin-top:12px;">Draft will appear here…</div>
+
+    <!-- 5) Raw response (optional) -->
+    <div class="card">
+      <h3>Raw Response (for debugging)</h3>
+      <div id="rawResponse" class="muted">Nothing yet.</div>
+    </div>
   </div>
 
-  <!-- Diagnostics -->
-  <div class="card">
-    <h3 style="margin-bottom:6px;">Diagnostics</h3>
-    <pre id="diagnostics" class="muted">No actions yet…</pre>
-    <div class="footer-note">If something fails, details will be shown here.</div>
-  </div>
-</div>
+  <script>
+    // ----- Helpers -----------------------------------------------------------
 
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const frameworkEl = document.getElementById("framework");
-  const companyEl   = document.getElementById("companyName");
-  const notesEl     = document.getElementById("notes");
-
-  const priorPdfEl  = document.getElementById("priorPdf");
-  const tbEl        = document.getElementById("tbCurrent");
-
-  const priorStatus = document.getElementById("priorStatus");
-  const tbStatus    = document.getElementById("tbStatus");
-
-  const generateBtn = document.getElementById("generateBtn");
-  const clearBtn    = document.getElementById("clearBtn");
-  const previewBtn  = document.getElementById("previewBtn");
-
-  const aiOutput    = document.getElementById("aiOutput");
-  const diagnostics = document.getElementById("diagnostics");
-
-  function set(el, html, cls) {
-    if (!el) return;
-    if (cls !== undefined) el.className = cls;
-    el.innerHTML = html;
-  }
-
-  function bytesFromB64Len(b64Len) {
-    // approximate decoded bytes length
-    return Math.round((b64Len * 3) / 4);
-  }
-
-  async function fileToBase64(inputEl) {
-    const f = inputEl?.files?.[0];
-    if (!f) return null;
-    return new Promise((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onerror = () => reject(new Error("Failed to read file"));
-      fr.onload = () => {
-        const result = String(fr.result || "");
-        const comma = result.indexOf(",");
-        const base64 = comma >= 0 ? result.slice(comma + 1) : result;
-        resolve({ name: f.name, mimeType: f.type || "", base64 });
-      };
-      fr.readAsDataURL(f);
-    });
-  }
-
-  priorPdfEl.addEventListener("change", () => {
-    const f = priorPdfEl.files?.[0];
-    if (!f) { set(priorStatus, "No PDF selected.", "muted"); return; }
-    set(priorStatus, `📄 Selected: ${f.name} (${Math.round(f.size/1024)} KB)`, "muted");
-  });
-
-  tbEl.addEventListener("change", () => {
-    const f = tbEl.files?.[0];
-    if (!f) { set(tbStatus, "No TB selected.", "muted"); return; }
-    set(tbStatus, `📊 Selected: ${f.name} (${Math.round(f.size/1024)} KB)`, "muted");
-  });
-
-  clearBtn.addEventListener("click", () => {
-    set(aiOutput, "Draft will appear here…", "muted");
-    set(diagnostics, "No actions yet…", "muted");
-  });
-
-  async function buildPayload() {
-    const framework   = frameworkEl?.value || "IFRS";
-    const companyName = companyEl?.value || "";
-    const notes       = notesEl?.value || "";
-
-    const priorPdf = await fileToBase64(priorPdfEl);
-    const tbCurrent = await fileToBase64(tbEl);
-
-    const files = [];
-    if (priorPdf)  files.push({ kind: "priorPdf",  ...priorPdf });
-    if (tbCurrent) files.push({ kind: "tbCurrent", ...tbCurrent });
-
-    return { framework, companyName, notes, files };
-  }
-
-  previewBtn.addEventListener("click", async () => {
-    try {
-      const payload = await buildPayload();
-      const diag = {
-        framework: payload.framework,
-        companyName: payload.companyName,
-        notesLength: payload.notes.length,
-        files: payload.files.map(f => ({
-          kind: f.kind, name: f.name, mimeType: f.mimeType,
-          approxBytes: bytesFromB64Len(f.base64.length)
-        }))
-      };
-      set(diagnostics, "Preview of payload to be sent (no AI call):\n" + JSON.stringify(diag, null, 2), "muted");
-      set(aiOutput, "Preview created. Click Generate to call Gemini.", "muted");
-    } catch (err) {
-      set(diagnostics, "Preview failed: " + err.message, "err");
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Failed to read file: " + file.name));
+        reader.onload = () => {
+          const result = reader.result || "";
+          // result is a data URL for binary files; remove prefix if present
+          const base64 = String(result).split("base64,")[1] || String(result);
+          resolve(base64);
+        };
+        reader.readAsDataURL(file);
+      });
     }
-  });
 
-  generateBtn.addEventListener("click", async () => {
-    try {
-      const payload = await buildPayload();
+    function fmtKB(bytes) {
+      return (bytes / 1024).toFixed(1) + " KB";
+    }
 
-      if (!payload.files.length) {
-        set(aiOutput, "<span class='err'>⚠️ Please upload a prior-year PDF and/or a current-year TB (Excel).</span>", "err");
-        return;
-      }
-
-      const light = {
-        framework: payload.framework,
-        companyName: payload.companyName,
-        notesLength: payload.notes.length,
-        files: payload.files.map(f => ({
-          kind: f.kind, name: f.name, mimeType: f.mimeType,
-          approxBytes: bytesFromB64Len(f.base64.length)
-        }))
-      };
-      set(diagnostics, "Sending JSON to generateStatements:\n" + JSON.stringify(light, null, 2), "muted");
-      set(aiOutput, "⏳ Uploading and generating draft financial statements…", "loading");
-
-      const res = await fetch("/.netlify/functions/generateStatements", {
+    async function postJSON(url, data) {
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(data),
       });
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); } catch {}
+      return { ok: res.ok, status: res.status, statusText: res.statusText, text, json };
+    }
 
-      const raw = await res.text();
-      let data = {};
-      try { data = JSON.parse(raw); } catch {}
+    function updateDiagnostics(statusText, html) {
+      document.getElementById("diagStatus").textContent = statusText;
+      document.getElementById("diagBody").innerHTML = html;
+    }
 
-      if (!res.ok) {
-        const details = [
-          data.error && `Error: ${data.error}`,
-          data.details && `Details: ${data.details}`,
-          data.modelTried && `Model tried: ${data.modelTried}`,
-          data.endpoint && `Endpoint: ${data.endpoint}`,
-          data.responseBody && `Response body:\n${data.responseBody}`
-        ].filter(Boolean).join("\n");
-        set(aiOutput, `<pre class="err">❌ Generation failed.\n${details || raw || "No details returned."}</pre>`, "err");
-        return;
+    // Build payload for /generateStatements
+    async function buildPayload() {
+      const companyName = document.getElementById("companyName").value.trim();
+      const framework   = document.getElementById("framework").value;
+      const notes       = document.getElementById("notes").value || "";
+
+      const priorInput  = document.getElementById("priorFiles");
+      const tbInput     = document.getElementById("tbCurrent");
+
+      const files = [];
+      let totalBytes = 0;
+
+      // Prior: allow multiple (PDFs or images)
+      if (priorInput.files && priorInput.files.length > 0) {
+        for (const f of priorInput.files) {
+          const base64 = await readFileAsBase64(f);
+          const approx = Math.round((base64.length * 3) / 4);
+          totalBytes += approx;
+          files.push({
+            kind: "prior",
+            name: f.name,
+            mimeType: f.type || guessMimeFromName(f.name),
+            base64
+          });
+        }
       }
 
-      set(aiOutput, `<h3>✅ Draft Generated (${data.model || "model unknown"})</h3><pre>${data.output || "No output"}</pre>`);
-    } catch (err) {
-      set(aiOutput, `<span class="err">❌ ${err.message}</span>`, "err");
-      set(diagnostics, `Exception: ${err.message}`, "muted");
-      console.error("Generate exception:", err);
+      // TB current: one Excel file
+      if (tbInput.files && tbInput.files[0]) {
+        const f = tbInput.files[0];
+        const base64 = await readFileAsBase64(f);
+        const approx = Math.round((base64.length * 3) / 4);
+        totalBytes += approx;
+        files.push({
+          kind: "tbCurrent",
+          name: f.name,
+          mimeType: f.type || guessMimeFromName(f.name),
+          base64
+        });
+      }
+
+      // Diagnostics display
+      const listHtml = files.length
+        ? `<ul>` + files.map(f => {
+            const approxBytes = Math.round((f.base64.length * 3) / 4);
+            return `<li class="mono">${f.name} <span class="muted">(${f.mimeType || "unknown"}, ~${fmtKB(approxBytes)})</span></li>`;
+          }).join("") + `</ul>`
+        : `<span class="muted">No files attached.</span>`;
+
+      updateDiagnostics("Ready", `
+        <div><b>Framework:</b> ${framework}</div>
+        <div><b>Company:</b> ${companyName || "(not set)"}</div>
+        <div><b>Notes length:</b> ${notes.length}</div>
+        <div style="margin-top:6px"><b>Files:</b></div>
+        ${listHtml}
+        <div class="muted" style="margin-top:6px">Approx total: <b>${fmtKB(totalBytes)}</b> (keep under ~9–10 MB).</div>
+      `);
+
+      return { framework, companyName, notes, files };
     }
-  });
-});
-</script>
+
+    function guessMimeFromName(name = "") {
+      const n = name.toLowerCase();
+      if (n.endsWith(".pdf")) return "application/pdf";
+      if (n.endsWith(".png")) return "image/png";
+      if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+      if (n.endsWith(".xls")) return "application/vnd.ms-excel";
+      if (n.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      return "";
+    }
+
+    async function generateStatements(payload) {
+      const out = document.getElementById("aiOutput");
+      const raw = document.getElementById("rawResponse");
+      out.innerHTML = "⏳ Contacting Gemini…";
+      raw.textContent = "Waiting…";
+
+      const res = await postJSON("/.netlify/functions/generateStatements", payload);
+
+      // Always show raw (for debugging)
+      raw.innerHTML =
+        `<div class="small mono"><b>Status:</b> ${res.status} ${res.statusText}</div>` +
+        `<pre class="mono">${(res.text || "").slice(0, 100000)}</pre>`;
+
+      if (res.ok && res.json?.output) {
+        out.innerHTML =
+          `<div class="mono" style="white-space:pre-wrap"><b>Model:</b> ${res.json.model || "(unknown)"}\n\n${res.json.output}</div>`;
+      } else {
+        const msg = res.json?.error || res.statusText || "Unknown error";
+        const details = res.json?.details || res.text || "(no body)";
+        out.innerHTML =
+          `<div class="error">❌ Generation failed.</div>
+           <div class="small mono"><b>Status:</b> ${res.status} ${res.statusText}</div>
+           <div class="small"><b>Error:</b> ${msg}</div>
+           <pre class="mono" style="white-space:pre-wrap">${details}</pre>`;
+      }
+    }
+
+    // ----- Wire up button ----------------------------------------------------
+
+    document.getElementById("btnGenerate").addEventListener("click", async () => {
+      try {
+        updateDiagnostics("Building…", `<span class="muted">Preparing files…</span>`);
+        const payload = await buildPayload();
+
+        // guardrails
+        if (!payload.files.length) {
+          updateDiagnostics("Error", `<span class="error">Please attach at least one file (PDF/image and/or Excel TB).</span>`);
+          return;
+        }
+
+        updateDiagnostics("Sending…", `<span class="muted">Uploading to server and calling Gemini…</span>`);
+        await generateStatements(payload);
+        updateDiagnostics("Done", `<span class="muted">Request completed. See results below.</span>`);
+      } catch (e) {
+        updateDiagnostics("Error", `<span class="error">Unexpected error: ${e?.message || e}</span>`);
+        document.getElementById("aiOutput").innerHTML =
+          `<div class="error">❌ Generation failed.</div><pre class="mono">${e?.stack || e}</pre>`;
+      }
+    });
+  </script>
 </body>
 </html>
+
 
 
 
