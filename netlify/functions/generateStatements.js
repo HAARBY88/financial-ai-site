@@ -1,20 +1,9 @@
 // netlify/functions/generateStatements.js
-// Accepts JSON:
-// { framework, companyName, notes, files:[{kind,name,mimeType,base64}] }
-//
-// - PDF (application/pdf) -> sent as inlineData (base64)
-// - Excel (.xls/.xlsx)    -> converted to CSV text and sent as a text part
-// - Images (png/jpeg)     -> sent as inlineData (base64) so Gemini can READ them
-//
-// Env needed: GEMINI_API_KEY
-// Optional:   GEMINI_MODEL (defaults to "gemini-2.5-flash")
-// Optional:   DRY_RUN=1 (skips AI call, echoes what the function received)
-
 import { GoogleGenAI } from "@google/genai";
 import XLSX from "xlsx";
 
 const PDF_MIME = "application/pdf";
-const IMAGE_MIMES = new Set(["image/png", "image/jpeg"]); // image input for OCR/reading
+const IMAGE_MIMES = new Set(["image/png", "image/jpeg"]);
 const EXCEL_MIMES = new Set([
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -41,20 +30,20 @@ function guessMime(name = "") {
 function buildPrompt({ framework, companyName, notes }) {
   return `
 You are an expert ${framework} financial reporting assistant.
-Using the uploaded materials (prior-year report as PDF or images, and current-year trial balance in CSV text),
-produce a professional draft of the current-year financial statements for "${companyName || "the company"}".
-Mirror the structure of the prior report when present. Map amounts from the trial balance. 
-Flag missing disclosures required by ${framework}.
+Using the uploaded prior-year financial statements (PDF or images) and the current-year trial balance (CSV text),
+reconstruct a professional draft of the current-year financial statements for "${companyName || "the company"}".
+Mirror the structure of the prior year where appropriate and map amounts from the trial balance.
+Flag any missing disclosures required by ${framework}.
 
 User notes:
 ${notes || "(none)"}
 
-Output sections:
-1) Statement of Profit or Loss (with comparatives)
+Deliver:
+1) Statement of Profit or Loss and Other Comprehensive Income (with comparatives)
 2) Statement of Financial Position (with comparatives)
 3) Key accounting policies (brief)
 4) Key notes (revenue, leases, instruments, PPE/intangibles)
-5) Missing disclosures list
+5) List of missing or uncertain disclosures to confirm
 `.trim();
 }
 
@@ -65,16 +54,16 @@ export async function handler(event) {
     let body = {};
     try {
       body = JSON.parse(event.body || "{}");
-    } catch {
-      return json(400, { error: "Invalid JSON body" });
+    } catch (e) {
+      return json(400, { error: "Invalid JSON body", details: e?.message });
     }
 
     const { framework = "IFRS", companyName = "", notes = "", files = [] } = body;
+    if (!Array.isArray(files) || files.length === 0) {
+      return json(400, { error: "Please include at least one file as base64." });
+    }
 
-    if (!Array.isArray(files)) return json(400, { error: "`files` must be an array" });
-    if (files.length === 0) return json(400, { error: "Please include at least one file in base64" });
-
-    // Build Gemini parts: one user message with prompt, then attachments
+    // Build Gemini parts: prompt + attachments
     const parts = [{ text: buildPrompt({ framework, companyName, notes }) }];
 
     let totalApproxBytes = 0;
@@ -91,41 +80,30 @@ export async function handler(event) {
       const approxBytes = Math.round((base64.length * 3) / 4);
       totalApproxBytes += approxBytes;
 
-      // Netlify function request body practical cap ~10MB
+      // Netlify request body practical cap ~10 MB
       if (totalApproxBytes > 10 * 1024 * 1024) {
         return json(400, {
           error: `Total upload too large (~${(totalApproxBytes / 1024 / 1024).toFixed(2)} MB).`,
-          details: "Compress PDFs/images or split files. For big files, switch to object storage + server-side fetch.",
+          details: "Compress PDFs/images or split files. For large files, switch to object storage + server-side fetch.",
         });
       }
 
       if (mimeType === PDF_MIME || IMAGE_MIMES.has(mimeType)) {
-        // ✅ PDFs & images: pass as inlineData (Gemini will read them)
         parts.push({ inlineData: { mimeType, data: base64 } });
-        echo.push({ kind: f.kind, name, mimeType, approxKB: (approxBytes / 1024).toFixed(1) });
+        echo.push({ name, mimeType, approxKB: (approxBytes / 1024).toFixed(1) });
       } else if (EXCEL_MIMES.has(mimeType)) {
-        // ✅ Excel: convert to CSV text so the model can read it
-        let csvText = "";
         try {
           const buf = Buffer.from(base64, "base64");
           const wb = XLSX.read(buf, { type: "buffer" });
-          const firstSheetName = wb.SheetNames[0];
-          if (!firstSheetName) return json(400, { error: `No sheets found in workbook: ${name}` });
-          const ws = wb.Sheets[firstSheetName];
-          csvText = XLSX.utils.sheet_to_csv(ws);
-          if (!csvText.trim()) {
-            return json(400, { error: `Empty or unreadable sheet in workbook: ${name}` });
-          }
+          const firstSheet = wb.SheetNames[0];
+          if (!firstSheet) return json(400, { error: `No sheets found in workbook: ${name}` });
+          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[firstSheet]);
+          if (!csv.trim()) return json(400, { error: `Empty or unreadable sheet in workbook: ${name}` });
+          parts.push({ text: `TRIAL BALANCE CSV (${name}):\n${csv}` });
+          echo.push({ name, mimeType, approxKB: (approxBytes / 1024).toFixed(1), csvPreview: csv.split("\n").slice(0, 5).join("\n") });
         } catch (e) {
           return json(400, { error: `Failed to parse Excel: ${name}`, details: e?.message || String(e) });
         }
-
-        parts.push({ text: `TRIAL BALANCE CSV (${name}):\n${csvText}` });
-        echo.push({
-          kind: f.kind, name, mimeType,
-          approxKB: (approxBytes / 1024).toFixed(1),
-          csvPreview: csvText.split("\n").slice(0, 5).join("\n")
-        });
       } else {
         return json(400, {
           error: `Unsupported file type for ${name}: ${mimeType || "unknown"}. Upload PDF, PNG/JPEG, or Excel (.xls/.xlsx).`,
@@ -153,21 +131,30 @@ export async function handler(event) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return json(500, { error: "Missing GEMINI_API_KEY" });
 
-    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash"; // multimodal text model (reads images/PDF)
+    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
     try {
       const genAI = new GoogleGenAI({ apiKey });
       const contents = [{ role: "user", parts }];
       const response = await genAI.models.generateContent({ model: modelName, contents });
       const text = response?.text?.();
-      if (!text) return json(502, { error: "No text generated by Gemini", modelTried: modelName });
+      if (!text) {
+        // Return entire response for visibility
+        return json(502, { error: "No text generated by Gemini", modelTried: modelName, raw: response });
+      }
       return json(200, { output: text, model: modelName });
     } catch (e) {
-      return json(500, { error: "Gemini request failed", details: e?.message || String(e) });
+      // Bubble up Gemini HTTP details if available
+      return json(500, {
+        error: "Gemini request failed",
+        details: e?.message || String(e),
+      });
     }
   } catch (err) {
     return json(500, { error: "Unhandled server error", details: err?.message || String(err) });
   }
 }
+
 
 
 
