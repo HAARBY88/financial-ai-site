@@ -8,8 +8,7 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  external_node_modules = ["@google/genai", "xlsx"]
+  external_node_modules = ["@google/genai","xlsx"]
 
 [functions."generateStatements"]
-  timeout = 60
-
+  timeout = 26
