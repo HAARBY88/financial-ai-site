@@ -11,4 +11,5 @@
   external_node_modules = ["@google/genai","xlsx"]
 
 [functions."generateStatements"]
-  timeout = 26
+  timeout = 55
+
