@@ -1,159 +1,184 @@
 // netlify/functions/generateStatements.js
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/genai";
 import XLSX from "xlsx";
 
-const PDF_MIME = "application/pdf";
-const IMAGE_MIMES = new Set(["image/png", "image/jpeg"]);
-const EXCEL_MIMES = new Set([
+const json = (code, obj) => ({
+  statusCode: code,
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(obj),
+});
+
+const PDF = "application/pdf";
+const IMG = new Set(["image/png", "image/jpeg"]);
+const XLS = new Set([
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
-
-function json(status, obj) {
-  return {
-    statusCode: status,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(obj),
-  };
-}
+const TXT = new Set(["text/plain", "text/csv", "application/csv"]);
 
 function guessMime(name = "") {
   const n = name.toLowerCase();
-  if (n.endsWith(".pdf")) return PDF_MIME;
+  if (n.endsWith(".pdf")) return PDF;
   if (n.endsWith(".png")) return "image/png";
   if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
   if (n.endsWith(".xls")) return "application/vnd.ms-excel";
   if (n.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (n.endsWith(".csv")) return "text/csv";
+  if (n.endsWith(".txt")) return "text/plain";
   return "";
 }
 
-function buildPrompt({ framework, companyName, notes }) {
+function buildPrompt(framework, companyName, notes) {
   return `
-You are an expert ${framework} financial reporting assistant.
-Using the uploaded prior-year financial statements (PDF or images) and the current-year trial balance (CSV text),
-reconstruct a professional draft of the current-year financial statements for "${companyName || "the company"}".
-Mirror the structure of the prior year where appropriate and map amounts from the trial balance.
-Flag any missing disclosures required by ${framework}.
-
-User notes:
-${notes || "(none)"}
+You are an expert ${framework} reporting assistant.
+Use the uploaded prior-year report (PDF/images) and the current-year trial balance (CSV/text)
+to draft current-year financial statements for "${companyName || "the company"}".
 
 Deliver:
-1) Statement of Profit or Loss and Other Comprehensive Income (with comparatives)
-2) Statement of Financial Position (with comparatives)
-3) Key accounting policies (brief)
+1) Income Statement (with prior-year comparative)
+2) Balance Sheet (with prior-year comparative)
+3) Draft accounting policies
 4) Key notes (revenue, leases, instruments, PPE/intangibles)
-5) List of missing or uncertain disclosures to confirm
+5) List missing/uncertain disclosures to confirm with management
+
+User notes:
+${notes || "(none)"}  
 `.trim();
 }
 
 export async function handler(event) {
+  if (event.httpMethod !== "POST") return json(405, { error: "Method Not Allowed" });
+
+  let body;
   try {
-    if (event.httpMethod !== "POST") return json(405, { error: "Method Not Allowed" });
+    body = JSON.parse(event.body || "{}");
+  } catch (e) {
+    return json(400, { error: "Invalid JSON", details: e.message });
+  }
 
-    let body = {};
-    try {
-      body = JSON.parse(event.body || "{}");
-    } catch (e) {
-      return json(400, { error: "Invalid JSON body", details: e?.message });
-    }
+  const { framework = "IFRS", companyName = "", notes = "", files = [] } = body;
+  if (!Array.isArray(files) || files.length === 0) {
+    return json(400, { error: "Please include at least one file (PDF/image/TB)." });
+  }
 
-    const { framework = "IFRS", companyName = "", notes = "", files = [] } = body;
-    if (!Array.isArray(files) || files.length === 0) {
-      return json(400, { error: "Please include at least one file as base64." });
-    }
+  const parts = [{ text: buildPrompt(framework, companyName, notes) }];
+  const echo = [];
+  let totalBytes = 0;
 
-    // Build Gemini parts: prompt + attachments
-    const parts = [{ text: buildPrompt({ framework, companyName, notes }) }];
-
-    let totalApproxBytes = 0;
-    const echo = [];
-
+  try {
     for (const f of files) {
       if (!f) continue;
       const name = f.name || "unnamed";
-      const mimeType = f.mimeType || guessMime(name);
-      const base64 = typeof f.base64 === "string" ? f.base64.replace(/\s+/g, "") : "";
+      const mime = (f.mimeType || guessMime(name)) || "";
+      let base64 = typeof f.base64 === "string" ? f.base64 : "";
+      if (!base64) return json(400, { error: `Missing base64 for ${name}` });
 
-      if (!base64) return json(400, { error: `Missing base64 for file: ${name}` });
-
-      const approxBytes = Math.round((base64.length * 3) / 4);
-      totalApproxBytes += approxBytes;
-
-      // Netlify request body practical cap ~10 MB
-      if (totalApproxBytes > 10 * 1024 * 1024) {
+      base64 = base64.replace(/^data:[^;]+;base64,/, "").replace(/\s+/g, "");
+      const approx = Math.round((base64.length * 3) / 4);
+      totalBytes += approx;
+      if (totalBytes > 10 * 1024 * 1024) {
         return json(400, {
-          error: `Total upload too large (~${(totalApproxBytes / 1024 / 1024).toFixed(2)} MB).`,
-          details: "Compress PDFs/images or split files. For large files, switch to object storage + server-side fetch.",
+          error: `Payload too large (~${(totalBytes / 1024 / 1024).toFixed(2)} MB).`,
+          details: "Compress files or send fewer pages.",
         });
       }
 
-      if (mimeType === PDF_MIME || IMAGE_MIMES.has(mimeType)) {
-        parts.push({ inlineData: { mimeType, data: base64 } });
-        echo.push({ name, mimeType, approxKB: (approxBytes / 1024).toFixed(1) });
-      } else if (EXCEL_MIMES.has(mimeType)) {
-        try {
-          const buf = Buffer.from(base64, "base64");
-          const wb = XLSX.read(buf, { type: "buffer" });
-          const firstSheet = wb.SheetNames[0];
-          if (!firstSheet) return json(400, { error: `No sheets found in workbook: ${name}` });
-          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[firstSheet]);
-          if (!csv.trim()) return json(400, { error: `Empty or unreadable sheet in workbook: ${name}` });
-          parts.push({ text: `TRIAL BALANCE CSV (${name}):\n${csv}` });
-          echo.push({ name, mimeType, approxKB: (approxBytes / 1024).toFixed(1), csvPreview: csv.split("\n").slice(0, 5).join("\n") });
-        } catch (e) {
-          return json(400, { error: `Failed to parse Excel: ${name}`, details: e?.message || String(e) });
-        }
+      if (mime === PDF || IMG.has(mime)) {
+        parts.push({ inlineData: { mimeType: mime, data: base64 } });
+        echo.push({ name, mime, approxKB: (approx / 1024).toFixed(1) });
+
+      } else if (XLS.has(mime)) {
+        const buf = Buffer.from(base64, "base64");
+        const wb = XLSX.read(buf, { type: "buffer" });
+        const first = wb.SheetNames[0];
+        if (!first) return json(400, { error: `No sheets found in ${name}` });
+        const csv = XLSX.utils.sheet_to_csv(wb.Sheets[first]) || "";
+        if (!csv.trim()) return json(400, { error: `Empty sheet in ${name}` });
+        parts.push({ text: `TRIAL BALANCE CSV (${name}):\n${csv}` });
+        echo.push({ name, mime, approxKB: (approx / 1024).toFixed(1), preview: csv.split("\n").slice(0, 4).join("\n") });
+
+      } else if (TXT.has(mime)) {
+        const text = Buffer.from(base64, "base64").toString("utf8");
+        if (!text.trim()) return json(400, { error: `Empty text in ${name}` });
+        parts.push({ text: `TRIAL BALANCE TEXT (${name}):\n${text}` });
+        echo.push({ name, mime, approxKB: (approx / 1024).toFixed(1), preview: text.split("\n").slice(0, 4).join("\n") });
+
       } else {
         return json(400, {
-          error: `Unsupported file type for ${name}: ${mimeType || "unknown"}. Upload PDF, PNG/JPEG, or Excel (.xls/.xlsx).`,
+          error: `Unsupported type for ${name}: ${mime || "unknown"}`,
+          details: "Use PDF/PNG/JPG for reports, XLS/XLSX/TXT/CSV for TB.",
         });
       }
     }
+  } catch (e) {
+    return json(400, { error: "File handling failed", details: e.message || String(e) });
+  }
 
-    // Optional “no-AI” test path
-    if (process.env.DRY_RUN === "1") {
-      return json(200, {
-        output: [
-          "DRY_RUN active (no AI call).",
-          `Framework: ${framework}`,
-          `Company: ${companyName}`,
-          `Notes length: ${notes.length}`,
-          "Files received:",
-          ...echo.map(e => `- ${e.name} (${e.mimeType}, ~${e.approxKB} KB)`)
-        ].join("\n"),
-        model: "DRY_RUN",
-        debug: echo
+  // Optional: DRY_RUN to test the pipeline without calling Gemini
+  if (process.env.DRY_RUN === "1") {
+    return json(200, {
+      output: [
+        "DRY_RUN active (no AI call).",
+        `Framework: ${framework}`,
+        `Company: ${companyName}`,
+        `Notes length: ${notes.length}`,
+        "Files:",
+        ...echo.map(e => `- ${e.name} (${e.mime}, ~${e.approxKB} KB)`),
+      ].join("\n"),
+      model: "DRY_RUN",
+      debug: echo,
+    });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return json(500, { error: "Missing GEMINI_API_KEY" });
+
+  const modelName = process.env.GEMINI_MODEL || "models/gemini-2.5-flash";
+
+  // Add a 22s soft timeout (stay under Netlify’s hard limit)
+  const abort = new AbortController();
+  const t = setTimeout(() => abort.abort(), 22_000);
+
+  try {
+    const client = new GoogleGenerativeAI({ apiKey });
+    const model = client.getGenerativeModel({ model: modelName });
+
+    const result = await model.generateContent(
+      { contents: [{ role: "user", parts }] },
+      { signal: abort.signal }
+    );
+    clearTimeout(t);
+
+    // ✔ Correct extraction for @google/genai
+    const text =
+      result.output_text ??
+      result.candidates?.[0]?.content?.parts?.map(p => p.text || "").join("") ??
+      "";
+
+    if (!text) {
+      // Handle safety blocks or empty output explicitly
+      return json(502, {
+        error: "No text generated by Gemini",
+        model: modelName,
+        finishReason: result.candidates?.[0]?.finish_reason,
+        safetyRatings: result.candidates?.[0]?.safety_ratings,
+        raw: result, // keep for debugging (can remove later)
       });
     }
 
-    // Call Gemini
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return json(500, { error: "Missing GEMINI_API_KEY" });
+    // success
+    return json(200, { output: text, model: modelName });
 
-    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-
-    try {
-      const genAI = new GoogleGenAI({ apiKey });
-      const contents = [{ role: "user", parts }];
-      const response = await genAI.models.generateContent({ model: modelName, contents });
-      const text = response?.text?.();
-      if (!text) {
-        // Return entire response for visibility
-        return json(502, { error: "No text generated by Gemini", modelTried: modelName, raw: response });
-      }
-      return json(200, { output: text, model: modelName });
-    } catch (e) {
-      // Bubble up Gemini HTTP details if available
-      return json(500, {
-        error: "Gemini request failed",
-        details: e?.message || String(e),
-      });
+  } catch (e) {
+    clearTimeout(t);
+    // If aborted, make that obvious
+    if (e.name === "AbortError") {
+      return json(504, { error: "Timeout: Gemini did not respond in time" });
     }
-  } catch (err) {
-    return json(500, { error: "Unhandled server error", details: err?.message || String(err) });
+    return json(500, { error: "Gemini request failed", details: e.message || String(e) });
   }
 }
+
 
 
 
