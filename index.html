@@ -2,324 +2,115 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Financial AI – Draft Statements</title>
+  <title>Ask Gemini (via Make)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root {
-      --blue: #004080;
-      --blue2: #0a66c2;
-      --bg: #f4f6f8;
-      --card: #fff;
-      --danger: #b00020;
-      --muted: #666;
-    }
-    body {
-      font-family: Arial, sans-serif;
-      background: var(--bg);
-      color: #333;
-      margin: 0;
-      padding: 24px;
-    }
-    h1,h2,h3 { color: var(--blue); margin: 0 0 8px; }
-    .container { max-width: 980px; margin: 0 auto; }
-    .card {
-      background: var(--card);
-      border-radius: 10px;
-      padding: 16px 18px;
-      box-shadow: 0 2px 8px rgba(0,0,0,.08);
-      margin: 14px 0;
-    }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-    .row-1 { display: grid; grid-template-columns: 1fr; gap: 12px; }
-    label { font-weight: 600; display: block; margin-bottom: 6px; }
-    input[type="text"], select, textarea {
-      width: 100%;
-      box-sizing: border-box;
-      padding: 10px 12px;
-      border-radius: 8px;
-      border: 1px solid #d3d6db;
-      font-size: 14px;
-      background: #fff;
-    }
-    input[type="file"] {
-      width: 100%;
-    }
-    textarea { min-height: 100px; }
-    .btn {
-      display: inline-block;
-      background: var(--blue);
-      color: #fff;
-      border: 0;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 15px;
-      cursor: pointer;
-    }
-    .btn:hover { background: var(--blue2); }
-    .muted { color: var(--muted); font-size: 13px; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-    pre {
-      background: #f1f3f5;
-      border-radius: 8px;
-      padding: 12px;
-      overflow: auto;
-      white-space: pre-wrap;
-    }
-    .error {
-      color: var(--danger);
-      font-weight: 600;
-    }
-    .flex-between {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 10px; flex-wrap: wrap;
-    }
-    .pill {
-      display: inline-block;
-      background: #eef3ff;
-      color: #1d3a8a;
-      border: 1px solid #c7d6ff;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-    }
-    .small { font-size: 12px; }
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { color: #004080; }
+    label { display:block; margin-top: 1rem; }
+    textarea, input[type="text"] { width:100%; padding:.6rem; }
+    .row { margin-top: 1rem; display:flex; gap:.5rem; flex-wrap:wrap; }
+    button { background:#004080; color:#fff; border:none; padding:.6rem 1rem; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+    .card { background:#fff; border:1px solid #e3e6ea; border-radius:8px; padding:1rem; margin-top:1rem; }
+    pre { background:#f6f8fa; padding:1rem; white-space:pre-wrap; border-radius:6px; }
+    .error { color:#b00020; }
+    .muted { color:#6b7280; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Financial AI – Draft Statements</h1>
+  <h1>Ask Google Gemini</h1>
 
-    <!-- 1) Company & framework -->
-    <div class="card">
-      <h2>Company & Framework</h2>
-      <div class="row">
-        <div>
-          <label for="companyName">Company name</label>
-          <input id="companyName" type="text" placeholder="e.g. ABC Ltd" />
-        </div>
-        <div>
-          <label for="framework">Accounting framework</label>
-          <select id="framework">
-            <option value="IFRS" selected>IFRS</option>
-            <option value="US GAAP">US GAAP</option>
-          </select>
-        </div>
-      </div>
-      <div class="row-1" style="margin-top:12px">
-        <div>
-          <label for="notes">Additional notes (optional)</label>
-          <textarea id="notes" placeholder="Anything important for this year (transactions, policies, restatements, etc.)"></textarea>
-        </div>
-      </div>
-      <p class="muted">Tip: Keep uploads under ~9–10 MB in total. PDFs and images are read directly; Excel is converted to CSV text.</p>
-    </div>
+  <div class="card">
+    <label for="question">Your question</label>
+    <textarea id="question" rows="4" placeholder="e.g., Summarise the key accounting policies for revenue recognition based on the text below..."></textarea>
 
-    <!-- 2) Uploads -->
-    <div class="card">
-      <h2>Uploads</h2>
-      <div class="row">
-        <div>
-          <label for="priorFiles">Prior-year report (PDF or images)</label>
-          <input id="priorFiles" type="file" accept=".pdf,.png,.jpg,.jpeg" multiple />
-          <p class="small muted">You can upload one PDF or several images (e.g., scans of statements).</p>
-        </div>
-        <div>
-          <label for="tbCurrent">Current-year trial balance (Excel)</label>
-          <input id="tbCurrent" type="file" accept=".xls,.xlsx" />
-          <p class="small muted">We’ll convert this to CSV text before sending to AI.</p>
-        </div>
-      </div>
-    </div>
+    <label for="file">Optional: attach a TXT/CSV file (we’ll send its text):</label>
+    <input id="file" type="file" accept=".txt,.csv" />
 
-    <!-- 3) Diagnostics -->
-    <div class="card">
-      <div class="flex-between">
-        <h2>Diagnostics</h2>
-        <span class="pill" id="diagStatus">Idle</span>
-      </div>
-      <div id="diagBody" class="muted">Click “Generate Draft Statements” to see what we’ll send.</div>
-    </div>
-
-    <!-- 4) Generate -->
-    <div class="card">
-      <div class="flex-between">
-        <h2>Generate Draft Statements</h2>
-        <button id="btnGenerate" class="btn">Generate Draft Statements</button>
-      </div>
-      <div id="aiOutput" style="margin-top: 10px;">
-        <span class="muted">AI output will appear here…</span>
-      </div>
-    </div>
-
-    <!-- 5) Raw response (optional) -->
-    <div class="card">
-      <h3>Raw Response (for debugging)</h3>
-      <div id="rawResponse" class="muted">Nothing yet.</div>
+    <div class="row">
+      <button id="askBtn">Ask</button>
+      <span id="status" class="muted"></span>
     </div>
   </div>
 
+  <div class="card">
+    <h3>Answer</h3>
+    <div id="answer" class="muted">No answer yet.</div>
+  </div>
+
+  <div class="card">
+    <h3>Diagnostics</h3>
+    <div id="diag" class="muted">Nothing sent yet.</div>
+  </div>
+
   <script>
-    // ----- Helpers -----------------------------------------------------------
+    const WEBHOOK_URL = "https://hook.eu2.make.com/o4kmaji8q6m4qpfenqr4u2oiam6fu5de"; // <- paste your Make custom webhook URL here
 
-    function readFileAsBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error("Failed to read file: " + file.name));
-        reader.onload = () => {
-          const result = reader.result || "";
-          // result is a data URL for binary files; remove prefix if present
-          const base64 = String(result).split("base64,")[1] || String(result);
-          resolve(base64);
-        };
-        reader.readAsDataURL(file);
-      });
-    }
+    const $ = (id) => document.getElementById(id);
+    const askBtn = $("askBtn");
+    const statusEl = $("status");
+    const answerEl = $("answer");
+    const diagEl = $("diag");
 
-    function fmtKB(bytes) {
-      return (bytes / 1024).toFixed(1) + " KB";
-    }
+    askBtn.addEventListener("click", async () => {
+      const text = $("question").value.trim();
+      const fileInput = $("file");
+      const file = fileInput.files[0];
 
-    async function postJSON(url, data) {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      const text = await res.text();
-      let json;
-      try { json = JSON.parse(text); } catch {}
-      return { ok: res.ok, status: res.status, statusText: res.statusText, text, json };
-    }
+      answerEl.textContent = "";
+      statusEl.textContent = "Sending...";
+      askBtn.disabled = true;
 
-    function updateDiagnostics(statusText, html) {
-      document.getElementById("diagStatus").textContent = statusText;
-      document.getElementById("diagBody").innerHTML = html;
-    }
-
-    // Build payload for /generateStatements
-    async function buildPayload() {
-      const companyName = document.getElementById("companyName").value.trim();
-      const framework   = document.getElementById("framework").value;
-      const notes       = document.getElementById("notes").value || "";
-
-      const priorInput  = document.getElementById("priorFiles");
-      const tbInput     = document.getElementById("tbCurrent");
-
-      const files = [];
-      let totalBytes = 0;
-
-      // Prior: allow multiple (PDFs or images)
-      if (priorInput.files && priorInput.files.length > 0) {
-        for (const f of priorInput.files) {
-          const base64 = await readFileAsBase64(f);
-          const approx = Math.round((base64.length * 3) / 4);
-          totalBytes += approx;
-          files.push({
-            kind: "prior",
-            name: f.name,
-            mimeType: f.type || guessMimeFromName(f.name),
-            base64
-          });
-        }
-      }
-
-      // TB current: one Excel file
-      if (tbInput.files && tbInput.files[0]) {
-        const f = tbInput.files[0];
-        const base64 = await readFileAsBase64(f);
-        const approx = Math.round((base64.length * 3) / 4);
-        totalBytes += approx;
-        files.push({
-          kind: "tbCurrent",
-          name: f.name,
-          mimeType: f.type || guessMimeFromName(f.name),
-          base64
-        });
-      }
-
-      // Diagnostics display
-      const listHtml = files.length
-        ? `<ul>` + files.map(f => {
-            const approxBytes = Math.round((f.base64.length * 3) / 4);
-            return `<li class="mono">${f.name} <span class="muted">(${f.mimeType || "unknown"}, ~${fmtKB(approxBytes)})</span></li>`;
-          }).join("") + `</ul>`
-        : `<span class="muted">No files attached.</span>`;
-
-      updateDiagnostics("Ready", `
-        <div><b>Framework:</b> ${framework}</div>
-        <div><b>Company:</b> ${companyName || "(not set)"}</div>
-        <div><b>Notes length:</b> ${notes.length}</div>
-        <div style="margin-top:6px"><b>Files:</b></div>
-        ${listHtml}
-        <div class="muted" style="margin-top:6px">Approx total: <b>${fmtKB(totalBytes)}</b> (keep under ~9–10 MB).</div>
-      `);
-
-      return { framework, companyName, notes, files };
-    }
-
-    function guessMimeFromName(name = "") {
-      const n = name.toLowerCase();
-      if (n.endsWith(".pdf")) return "application/pdf";
-      if (n.endsWith(".png")) return "image/png";
-      if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
-      if (n.endsWith(".xls")) return "application/vnd.ms-excel";
-      if (n.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-      return "";
-    }
-
-    async function generateStatements(payload) {
-      const out = document.getElementById("aiOutput");
-      const raw = document.getElementById("rawResponse");
-      out.innerHTML = "⏳ Contacting Gemini…";
-      raw.textContent = "Waiting…";
-
-      const res = await postJSON("/.netlify/functions/generateStatements", payload);
-
-      // Always show raw (for debugging)
-      raw.innerHTML =
-        `<div class="small mono"><b>Status:</b> ${res.status} ${res.statusText}</div>` +
-        `<pre class="mono">${(res.text || "").slice(0, 100000)}</pre>`;
-
-      if (res.ok && res.json?.output) {
-        out.innerHTML =
-          `<div class="mono" style="white-space:pre-wrap"><b>Model:</b> ${res.json.model || "(unknown)"}\n\n${res.json.output}</div>`;
-      } else {
-        const msg = res.json?.error || res.statusText || "Unknown error";
-        const details = res.json?.details || res.text || "(no body)";
-        out.innerHTML =
-          `<div class="error">❌ Generation failed.</div>
-           <div class="small mono"><b>Status:</b> ${res.status} ${res.statusText}</div>
-           <div class="small"><b>Error:</b> ${msg}</div>
-           <pre class="mono" style="white-space:pre-wrap">${details}</pre>`;
-      }
-    }
-
-    // ----- Wire up button ----------------------------------------------------
-
-    document.getElementById("btnGenerate").addEventListener("click", async () => {
-      try {
-        updateDiagnostics("Building…", `<span class="muted">Preparing files…</span>`);
-        const payload = await buildPayload();
-
-        // guardrails
-        if (!payload.files.length) {
-          updateDiagnostics("Error", `<span class="error">Please attach at least one file (PDF/image and/or Excel TB).</span>`);
+      let fileText = "";
+      if (file) {
+        // For now, read TXT/CSV as plain text in the browser
+        try {
+          fileText = await file.text();
+        } catch (e) {
+          statusEl.textContent = "";
+          answerEl.innerHTML = `<span class="error">Could not read file: ${e.message}</span>`;
+          askBtn.disabled = false;
           return;
         }
+      }
 
-        updateDiagnostics("Sending…", `<span class="muted">Uploading to server and calling Gemini…</span>`);
-        await generateStatements(payload);
-        updateDiagnostics("Done", `<span class="muted">Request completed. See results below.</span>`);
-      } catch (e) {
-        updateDiagnostics("Error", `<span class="error">Unexpected error: ${e?.message || e}</span>`);
-        document.getElementById("aiOutput").innerHTML =
-          `<div class="error">❌ Generation failed.</div><pre class="mono">${e?.stack || e}</pre>`;
+      // Build payload for Make webhook
+      const payload = { text, file_text: fileText };
+
+      // Show what we're sending (for debugging)
+      diagEl.textContent = "Sending JSON to Make:\n" + JSON.stringify({
+        text: text.slice(0,2000),
+        file_text_preview: fileText ? fileText.slice(0,1000) + (fileText.length>1000?'…':'') : "(none)"
+      }, null, 2);
+
+      try {
+        const res = await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        // Make’s Custom Webhook Response will return JSON
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+
+        answerEl.innerHTML = `<pre>${data.answer || "(no text returned)"}</pre>`;
+        statusEl.textContent = "Done.";
+      } catch (err) {
+        statusEl.textContent = "";
+        answerEl.innerHTML = `<span class="error">Request failed: ${err.message}</span>`;
+      } finally {
+        askBtn.disabled = false;
       }
     });
   </script>
 </body>
 </html>
+
 
 
 
